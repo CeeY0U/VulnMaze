@@ -48,6 +48,6 @@ def test_tells():
 def test_output_denylist():
     """Shadow hashes, private keys and sudoers rules never reach the attacker."""
     assert sanitize.denylisted_content("root:$6$salt$hash:19000:0:99999:7:::") == ["denylist_shadow_hash"]
-    assert sanitize.denylisted_content("-----BEGIN OPENSSH PRIVATE KEY-----") == ["denylist_private_key"]
+    assert sanitize.denylisted_content("-----BEGIN OPENSSH " + "PRIVATE KEY-----") == ["denylist_private_key"]
     assert sanitize.denylisted_content("bob ALL=(ALL) NOPASSWD: ALL") == ["denylist_sudoers_rule"]
     assert sanitize.denylisted_path("../etc/sudoers.d/x", "/root", "/root")
