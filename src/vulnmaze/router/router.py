@@ -46,8 +46,8 @@ class Route(StrEnum):
 @dataclass(frozen=True)
 class Decision:
     route: Route
-    command: str            # effective command name (basename, wrappers removed)
-    argv: tuple[str, ...]   # the stage as classified
+    command: str  # effective command name (basename, wrappers removed)
+    argv: tuple[str, ...]  # the stage as classified
     reason: str
 
     def as_dict(self) -> dict:
@@ -68,8 +68,20 @@ _GLOB_CHARS = set("*?[")
 _EMBEDDED_PATH = re.compile(r"(?:~|/)[A-Za-z0-9_.*?\[\]/+-]*")
 _CONTROL_OPERATORS = {";", "&&", "||", "|", "&", "\n", "|&", ";;"}
 # Wrappers whose real command is one of their arguments.
-_WRAPPERS = {"env", "nohup", "command", "builtin", "exec", "time", "nice",
-             "timeout", "stdbuf", "busybox", "setsid", "xargs"}
+_WRAPPERS = {
+    "env",
+    "nohup",
+    "command",
+    "builtin",
+    "exec",
+    "time",
+    "nice",
+    "timeout",
+    "stdbuf",
+    "busybox",
+    "setsid",
+    "xargs",
+}
 
 
 def _default_is_known(cmd: str) -> bool:
@@ -79,6 +91,7 @@ def _default_is_known(cmd: str) -> bool:
 # --------------------------------------------------------------------------
 # Path matching
 # --------------------------------------------------------------------------
+
 
 def _segments(path: str) -> list[str]:
     return [s for s in path.split("/") if s]
@@ -120,8 +133,9 @@ def normalise_path(word: str, cwd: str, home: str) -> str:
 def is_sensitive_path(word: str, cwd: str = "/root", home: str = "/root") -> bool:
     path = normalise_path(word, cwd, home)
     for seg in _segments(path):
-        if seg in SENSITIVE_SEGMENTS or (_GLOB_CHARS & set(seg) and any(
-                _seg_match(s, seg) for s in SENSITIVE_SEGMENTS)):
+        if seg in SENSITIVE_SEGMENTS or (
+            _GLOB_CHARS & set(seg) and any(_seg_match(s, seg) for s in SENSITIVE_SEGMENTS)
+        ):
             return True
     if _GLOB_CHARS & set(path):
         return _glob_hits_sensitive(path)
@@ -145,7 +159,7 @@ def _words_touching_sensitive(argv: Iterable[str], cwd: str, home: str) -> str |
         if pos == 0 and "/" not in word:
             continue  # a bare command name is not a path
         candidates = [word]
-        if "=" in word:                       # --file=/etc/shadow, if=/dev/mem
+        if "=" in word:  # --file=/etc/shadow, if=/dev/mem
             candidates.append(word.split("=", 1)[1])
         candidates.extend(_EMBEDDED_PATH.findall(word))
         for cand in candidates:
@@ -173,6 +187,7 @@ def _grants_setuid(argv: list[str]) -> bool:
 # Classification
 # --------------------------------------------------------------------------
 
+
 def _unwrap(argv: list[str]) -> list[str]:
     """Drop leading assignments and wrapper commands so `env X=1 nohup cat f`
     is classified as `cat f`."""
@@ -187,8 +202,11 @@ def _unwrap(argv: list[str]) -> list[str]:
             return out
         out.pop(0)
         # skip wrapper options and their numeric/assignment arguments
-        while out and (out[0].startswith("-") or _ASSIGNMENT.match(out[0])
-                       or (name in {"timeout", "nice"} and re.fullmatch(r"[\d.]+[smhd]?", out[0]))):
+        while out and (
+            out[0].startswith("-")
+            or _ASSIGNMENT.match(out[0])
+            or (name in {"timeout", "nice"} and re.fullmatch(r"[\d.]+[smhd]?", out[0]))
+        ):
             opt = out.pop(0)
             if name == "nice" and opt == "-n" and out:
                 out.pop(0)
@@ -245,6 +263,7 @@ def split_pipeline(tokens: list[str]) -> list[list[str]]:
 
 
 # ---- offline splitting of raw lines --------------------------------------
+
 
 def _extract_substitutions(line: str) -> tuple[str, list[str]]:
     """Replace $(...) and `...` with a placeholder and return their contents
@@ -320,8 +339,12 @@ def classify_line(
                 decisions.append(classify_argv(stage, cwd, home, is_known))
                 # `bash -c "..."` / `sh -c "..."`: classify the inner script too
                 inner = _unwrap(stage)
-                if (_depth < 4 and inner and posixpath.basename(inner[0]) in {"bash", "sh", "dash", "zsh"}
-                        and "-c" in inner):
+                if (
+                    _depth < 4
+                    and inner
+                    and posixpath.basename(inner[0]) in {"bash", "sh", "dash", "zsh"}
+                    and "-c" in inner
+                ):
                     idx = inner.index("-c")
                     if idx + 1 < len(inner):
                         decisions.extend(classify_line(inner[idx + 1], cwd, home, is_known, _depth + 1))

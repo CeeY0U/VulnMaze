@@ -62,8 +62,7 @@ class Command_setcap(_SilentSuccess):
 class Command_pkexec(HoneyPotCommand):
     def call(self) -> None:
         self.errorWrite(
-            "Error executing command as another user: Not authorized\n\n"
-            "This incident has been reported.\n"
+            "Error executing command as another user: Not authorized\n\nThis incident has been reported.\n"
         )
         self.exit(127)
 

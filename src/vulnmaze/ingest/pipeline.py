@@ -92,10 +92,24 @@ class Ingestor:
         inserted: list[Row] = []
         with self.conn.cursor() as cur:
             for r in rows:
-                cur.execute(INSERT_EVENT, (
-                    r.event_hash, r.source, r.sensor, r.session, r.eventid, r.ts, r.src_ip_hmac,
-                    r.src_prefix, r.username, r.password_hmac, r.password_len, r.input, Jsonb(r.data),
-                ))
+                cur.execute(
+                    INSERT_EVENT,
+                    (
+                        r.event_hash,
+                        r.source,
+                        r.sensor,
+                        r.session,
+                        r.eventid,
+                        r.ts,
+                        r.src_ip_hmac,
+                        r.src_prefix,
+                        r.username,
+                        r.password_hmac,
+                        r.password_len,
+                        r.input,
+                        Jsonb(r.data),
+                    ),
+                )
                 if cur.fetchone() is not None:
                     inserted.append(r)
                 else:
@@ -120,9 +134,16 @@ class Ingestor:
                 # if two writers interleave; within a batch keep file order.
                 for r in sess_rows:
                     apply_digest(digest, r.as_dict(), inplace=True)
-                cur.execute(UPSERT_DIGEST, (
-                    source, session, Jsonb(digest), digest["closed"], digest["counts"]["events"],
-                ))
+                cur.execute(
+                    UPSERT_DIGEST,
+                    (
+                        source,
+                        session,
+                        Jsonb(digest),
+                        digest["closed"],
+                        digest["counts"]["events"],
+                    ),
+                )
                 if digest["closed"]:
                     self.secrets.pop((source, session), None)
 
@@ -140,10 +161,20 @@ def rebuild_digest(conn: psycopg.Connection, source: str, session: str) -> dict:
     events = []
     for eventid, sess, ts, ip, prefix, user, pwh, pwl, inp, sensor, data in cur:
         e = dict(data)
-        e.update(eventid=eventid, session=sess, ts=ts.isoformat(), src_ip_hmac=ip,
-                 src_prefix=str(prefix) if prefix else None)
-        for k, v in (("username", user), ("password_hmac", pwh), ("password_len", pwl),
-                     ("input", inp), ("sensor", sensor)):
+        e.update(
+            eventid=eventid,
+            session=sess,
+            ts=ts.isoformat(),
+            src_ip_hmac=ip,
+            src_prefix=str(prefix) if prefix else None,
+        )
+        for k, v in (
+            ("username", user),
+            ("password_hmac", pwh),
+            ("password_len", pwl),
+            ("input", inp),
+            ("sensor", sensor),
+        ):
             if v is not None:
                 e[k] = v
         events.append(e)

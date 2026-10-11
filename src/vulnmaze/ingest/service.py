@@ -60,9 +60,10 @@ def run(dsn: str, path: str, deid: Deidentifier, poll_s: float = 0.5, stop=lambd
 
 
 def main() -> None:
-    logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"),
-                        format="%(asctime)s %(levelname)s %(name)s %(message)s")
-    deid = Deidentifier.from_env()          # fails closed if the key is missing
+    logging.basicConfig(
+        level=os.environ.get("LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)s %(name)s %(message)s"
+    )
+    deid = Deidentifier.from_env()  # fails closed if the key is missing
     stopping = {"flag": False}
     signal.signal(signal.SIGTERM, lambda *_: stopping.__setitem__("flag", True))
     run(

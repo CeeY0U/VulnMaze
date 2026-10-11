@@ -36,7 +36,7 @@ class Fact:
     fact: str
     value: Any
     created_by: str
-    created: bool   # True only for the call that actually wrote it
+    created: bool  # True only for the call that actually wrote it
 
 
 class StateStore:
@@ -95,8 +95,9 @@ class StateStore:
     def get(self, src_ip: str, username: str, fact: str) -> Fact | None:
         return self._get(self.attacker_key(src_ip), username, fact)
 
-    def create_if_absent(self, src_ip: str, username: str, fact: str, value: Any,
-                         created_by: str = "unknown") -> Fact:
+    def create_if_absent(
+        self, src_ip: str, username: str, fact: str, value: Any, created_by: str = "unknown"
+    ) -> Fact:
         """Store `value` unless the fact exists; either way return the stored
         value. Safe under concurrency: exactly one caller wins, everyone gets
         the winner's value."""

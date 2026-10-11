@@ -104,16 +104,31 @@ S1B_PATTERNS: list[tuple[str, re.Pattern]] = [
     (name, re.compile(pat, re.IGNORECASE))
     for name, pat in [
         ("as_an_ai", r"\bas an (?:ai|artificial intelligence|assistant|language model)\b"),
-        ("i_am_ai", r"\bi(?: am|'m) (?:an? )?(?:ai|artificial intelligence|language model|assistant|chatbot|bot)\b"),
+        (
+            "i_am_ai",
+            r"\bi(?: am|'m) (?:an? )?(?:ai|artificial intelligence|language model|assistant|chatbot|bot)\b",
+        ),
         ("language_model", r"\b(?:large )?language models?\b"),
         ("llm", r"\bllms?\b"),
-        ("vendor", r"\b(?:chat ?gpt|openai|anthropic|claude|gemini|deepseek|mistral|qwen|llama ?\d|gpt-?\d)\b"),
+        (
+            "vendor",
+            r"\b(?:chat ?gpt|openai|anthropic|claude|gemini|deepseek|mistral|qwen|llama ?\d|gpt-?\d)\b",
+        ),
         ("honeypot", r"\bhoney ?pots?\b|\bcowrie\b|\bvulnmaze\b|\bdecoy\b|\bdeception\b"),
         ("simulated", r"\bsimulat(?:ed|es|ing|ion|or)\b|\bemulat(?:ed|es|ing|ion|or)\b"),
-        ("fake_env", r"\b(?:fake|virtual|mock|pretend) (?:shell|terminal|system|server|environment|output|machine)\b"),
-        ("instructions", r"\bsystem prompt\b|\bmy (?:instructions|guidelines|rules)\b|\bthese instructions\b"),
-        ("refusal", r"\bi (?:cannot|can't|can not|won't|will not|am unable to|'m unable to) "
-                    r"(?:help|assist|comply|provide|do that|execute|run that)\b"),
+        (
+            "fake_env",
+            r"\b(?:fake|virtual|mock|pretend) (?:shell|terminal|system|server|environment|output|machine)\b",
+        ),
+        (
+            "instructions",
+            r"\bsystem prompt\b|\bmy (?:instructions|guidelines|rules)\b|\bthese instructions\b",
+        ),
+        (
+            "refusal",
+            r"\bi (?:cannot|can't|can not|won't|will not|am unable to|'m unable to) "
+            r"(?:help|assist|comply|provide|do that|execute|run that)\b",
+        ),
         ("apology", r"\bi(?:'m| am) sorry\b|\bi apologi[sz]e\b"),
         ("roleplay", r"\brole-?play(?:ing)?\b"),
     ]

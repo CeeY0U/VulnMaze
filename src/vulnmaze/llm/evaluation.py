@@ -19,8 +19,21 @@ import yaml
 
 from vulnmaze.llm import sanitize
 
-CSV_FIELDS = ["id", "category", "command", "outcome", "exit_code", "stdout", "stderr", "latency_ms",
-              "reasons", "trap_violation", "visible_leak", "rater_1", "rater_2"]
+CSV_FIELDS = [
+    "id",
+    "category",
+    "command",
+    "outcome",
+    "exit_code",
+    "stdout",
+    "stderr",
+    "latency_ms",
+    "reasons",
+    "trap_violation",
+    "visible_leak",
+    "rater_1",
+    "rater_2",
+]
 
 
 @dataclass
@@ -52,7 +65,9 @@ def visible_leak(detector: sanitize.LeakageDetector, stdout: str, stderr: str) -
 def summarise(rows: Sequence[dict]) -> dict:
     lat = sorted(int(r["latency_ms"]) for r in rows if r["outcome"] in ("generated", "fallback"))
     traps = [r for r in rows if r["category"] == "trap"]
-    reasons = Counter(x.split(":")[0] for r in rows for x in (r["reasons"].split("|") if r["reasons"] else []))
+    reasons = Counter(
+        x.split(":")[0] for r in rows for x in (r["reasons"].split("|") if r["reasons"] else [])
+    )
 
     def pct(values, q):
         if not values:
