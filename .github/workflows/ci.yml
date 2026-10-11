@@ -6,12 +6,38 @@ on:
   pull_request:
 
 jobs:
-  lint:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: vulnmaze_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d vulnmaze_test"
+          --health-interval 5s
+          --health-retries 10
+    env:
+      VULNMAZE_TEST_DSN: postgresql://postgres:test@localhost:5432/vulnmaze_test
+      UV_PYTHON: ${{ matrix.python-version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --locked --all-extras
+      - run: uv run ruff check .
+      - run: uv run pytest
+
+  images:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: pip install ruff
-      - run: ruff check .
+      - run: docker build -f infra/honeypot/Dockerfile .
+      - run: docker build -f infra/pipeline/Dockerfile .
