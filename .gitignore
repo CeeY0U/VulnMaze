@@ -6,8 +6,6 @@ __pycache__/
 .ruff_cache/
 dist/
 build/
-dev/
-docs/
 infra/.env
 *.key
 # data never goes into git (use DVC / shared drive)
