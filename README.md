@@ -105,6 +105,26 @@ runs `ruff check --fix`, `ruff format` and the secret and whitespace checks on
 the staged files. If a hook changes a file, the commit stops: review the
 change, `git add` it and commit again.
 
+### Updating an existing clone
+
+After pulling changes, bring your environment up to date:
+
+```bash
+git switch main
+git pull
+uv sync --all-extras
+uv run pre-commit install
+```
+
+`uv sync` updates `.venv` to match the pulled `uv.lock` (run it after any pull
+that changes `uv.lock`). `pre-commit install` only needs running once per
+clone; running it again is harmless. To run the stack with the new code,
+rebuild the images with `docker compose -f infra/docker-compose.yml up -d --build --wait`.
+
+If you have a branch in progress from before the code was formatted, run
+`uv run ruff format .` on it and commit, then merge `main` into it. Formatting
+first keeps layout-only differences from showing up as merge conflicts.
+
 To run the same checks and the tests without committing:
 
 ```bash
