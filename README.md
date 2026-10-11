@@ -97,9 +97,24 @@ and creates `.venv` from the locked dependencies in `uv.lock`.
 
 ```bash
 uv sync --all-extras
-uv run ruff check .
+uv run pre-commit install
+```
+
+`pre-commit install` is a one-time step per clone. After it, every `git commit`
+runs `ruff check --fix`, `ruff format` and the secret and whitespace checks on
+the staged files. If a hook changes a file, the commit stops: review the
+change, `git add` it and commit again.
+
+To run the same checks and the tests without committing:
+
+```bash
+uv run ruff check --fix .
+uv run ruff format .
 uv run pytest
 ```
+
+CI runs `ruff check`, `ruff format --check` and `pytest` on every push to `main`
+and every pull request, so anything the hooks did not catch shows up there.
 
 Database tests are skipped unless `VULNMAZE_TEST_DSN` points at a PostgreSQL
 database they may write to:
