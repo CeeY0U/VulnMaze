@@ -78,7 +78,7 @@ def not_found(argv0: str) -> tuple[str, str, int]:
     return "", f"-bash: {argv0}: command not found\n", 127
 
 
-def transient_failure(argv0: str) -> tuple[str, str, int]:
+def transient_failure() -> tuple[str, str, int]:
     """For a command already pinned as installed: we must not say "not
     found", so answer with a plausible transient error and do NOT pin it,
     so a later attempt can succeed."""
@@ -480,7 +480,7 @@ class Gateway:
 
     async def _fallback(self, req, name: str, installed: bool, finish) -> ShellResult:
         if installed:
-            return finish("fallback", *transient_failure(req.argv[0]))
+            return finish("fallback", *transient_failure())
         # Not known to exist: say "not found" and pin that for this attacker
         # only, so they stay consistent without an outage deciding it for
         # everyone.

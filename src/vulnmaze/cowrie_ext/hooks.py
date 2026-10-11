@@ -149,9 +149,9 @@ def install() -> None:
             if found is not None:
                 return found
             try:
-                if getattr(self, "_vulnmaze_escalatable", None) and self._vulnmaze_escalatable.get(cmd):
-                    if escalation.escalatable_name(cmd):
-                        return escalation.make_command(cmd)
+                if (getattr(self, "_vulnmaze_escalatable", None) and self._vulnmaze_escalatable.get(cmd)
+                        and escalation.escalatable_name(cmd)):
+                    return escalation.make_command(cmd)
             except Exception:
                 log.failure("VulnMaze escalation lookup failed")
             # Fall back to exactly what Cowrie would have done.
