@@ -1,21 +1,22 @@
-# Cowrie (pinned) + the VulnMaze router plugin. No compilers, no shell tools
-# beyond the base image, runs as an unprivileged user.
+FROM ghcr.io/astral-sh/uv:0.12.4 AS uv
+
 FROM python:3.12-slim AS build
+COPY --from=uv /uv /usr/local/bin/uv
+ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never UV_PROJECT_ENVIRONMENT=/opt/venv
 WORKDIR /src
-COPY pyproject.toml README.md ./
+COPY pyproject.toml uv.lock ./
+RUN --mount=type=cache,target=/root/.cache/uv uv sync --locked --no-dev --no-install-project --extra honeypot
 COPY src ./src
-RUN pip install --no-cache-dir --prefix=/install ".[honeypot]"
+RUN --mount=type=cache,target=/root/.cache/uv uv sync --locked --no-dev --no-editable --extra honeypot
 
 FROM python:3.12-slim
-ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 TZ=UTC
-COPY --from=build /install /usr/local
+ENV PATH=/opt/venv/bin:$PATH PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 TZ=UTC
+COPY --from=build /opt/venv /opt/venv
 RUN useradd --system --uid 999 --home-dir /cowrie --shell /usr/sbin/nologin cowrie \
  && mkdir -p /cowrie/etc /cowrie/var/log/cowrie /cowrie/var/lib/cowrie/downloads /cowrie/var/lib/cowrie/tty \
  && chown -R cowrie:cowrie /cowrie/var \
- # Rebuild Twisted's plugin cache now; the root filesystem is read-only at runtime.
  && python -c "from twisted.plugin import IPlugin, getPlugins; list(getPlugins(IPlugin))"
 USER cowrie
 WORKDIR /cowrie
 EXPOSE 2222
-# -n: stay in foreground; -l -: log to stdout; empty pidfile: nothing to write.
 CMD ["twistd", "--umask=0022", "-n", "--pidfile=", "-l", "-", "vulnmaze"]

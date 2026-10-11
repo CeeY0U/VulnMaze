@@ -90,6 +90,28 @@ commands (needs the NVIDIA Container Toolkit on the host). Then set
 choices (`VULNMAZE_LLM_BACKEND`, `VULNMAZE_LLM_URL`, `VULNMAZE_LLM_MODEL`)
 are in `infra/.env.example`.
 
+## Development
+
+Requires [uv](https://docs.astral.sh/uv/). It installs Python 3.12 if needed
+and creates `.venv` from the locked dependencies in `uv.lock`.
+
+```bash
+uv sync --all-extras
+uv run ruff check .
+uv run pytest
+```
+
+Database tests are skipped unless `VULNMAZE_TEST_DSN` points at a PostgreSQL
+database they may write to:
+
+```bash
+docker run -d --rm --name vulnmaze-testdb -e POSTGRES_PASSWORD=test -e POSTGRES_DB=vulnmaze_test -p 127.0.0.1:55432:5432 postgres:16-alpine
+VULNMAZE_TEST_DSN=postgresql://postgres:test@127.0.0.1:55432/vulnmaze_test uv run pytest
+```
+
+After changing dependencies in `pyproject.toml`, run `uv lock` and commit
+`uv.lock`; the Docker images install exactly what it pins.
+
 ## Privacy and safety
 
 - De-identification happens before storage: nothing downstream can leak what

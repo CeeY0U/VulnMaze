@@ -9,6 +9,7 @@ host or reachable from the honeypot network.
 from __future__ import annotations
 
 import os
+import secrets
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -41,7 +42,7 @@ app = FastAPI(title="VulnMaze state store", lifespan=lifespan)
 
 def require_token(authorization: str = Header(default="")) -> None:
     expected = os.environ.get("VULNMAZE_STATE_TOKEN")
-    if not expected or authorization != f"Bearer {expected}":
+    if not expected or not secrets.compare_digest(authorization, f"Bearer {expected}"):
         raise HTTPException(status_code=401, detail="unauthorised")
 
 
