@@ -89,6 +89,7 @@ def transient_failure() -> tuple[str, str, int]:
 # Configuration
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class GatewayConfig:
     token: str
@@ -123,6 +124,7 @@ class GatewayConfig:
 # Parsing and validation of one model answer
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class Candidate:
     exists: bool
@@ -133,8 +135,10 @@ class Candidate:
     facts: dict[str, str]
 
 
-_ERROR_HINT = re.compile(r"(?im)^(?:.*: )?(?:error|usage|invalid option|unrecognized option|"
-                         r"no such file|permission denied|cannot|failed|unknown)")
+_ERROR_HINT = re.compile(
+    r"(?im)^(?:.*: )?(?:error|usage|invalid option|unrecognized option|"
+    r"no such file|permission denied|cannot|failed|unknown)"
+)
 
 
 def _extract_json(text: str) -> dict:
@@ -188,7 +192,9 @@ class Validator:
         self.persona_checker = PersonaChecker(persona)
         self.leaks = sanitize.LeakageDetector(prompts.leakage_corpus() + [CORRECTION], prompts.canary)
 
-    def clean(self, c: Candidate, req: EscalationRequest, reasons_nonfatal: list[str] | None = None) -> list[str]:
+    def clean(
+        self, c: Candidate, req: EscalationRequest, reasons_nonfatal: list[str] | None = None
+    ) -> list[str]:
         """Normalise `c` in place and return rejection reasons (empty = accept).
         Notes that do not reject the answer go to `reasons_nonfatal`."""
         reasons: list[str] = []
@@ -229,6 +235,7 @@ class Validator:
 # Database access (psycopg is synchronous; run in a worker thread)
 # ---------------------------------------------------------------------------
 
+
 def output_key(req: EscalationRequest) -> str:
     stdin_digest = hashlib.sha256((req.stdin or "").encode()).hexdigest()
     raw = json.dumps([req.cwd, req.argv, stdin_digest])
@@ -258,7 +265,9 @@ class Db:
             files = [f.fact[5:] for f in store.list(req.src_ip, req.username, "file:")]
         if files:
             facts["files created earlier"] = ", ".join(files[:20])
-        return Context(pinned.value if pinned else None, g.value if g else None, a.value if a else None, facts)
+        return Context(
+            pinned.value if pinned else None, g.value if g else None, a.value if a else None, facts
+        )
 
     def file_contents(self, req: EscalationRequest, paths: list[str]) -> list[CreatedFile]:
         with self.pool.connection() as conn:
@@ -270,13 +279,17 @@ class Db:
                     out.append(CreatedFile(path=p, content=f.value["content"]))
         return out
 
-    def pin_exists(self, req: EscalationRequest, name: str, value: bool, created_by: str,
-                   attacker_only: bool = False) -> bool:
+    def pin_exists(
+        self, req: EscalationRequest, name: str, value: bool, created_by: str, attacker_only: bool = False
+    ) -> bool:
         with self.pool.connection() as conn:
             store = StateStore(conn, self.deid)
             if attacker_only:
-                return bool(store.create_if_absent(req.src_ip, req.username, f"cmd-exists:{name}",
-                                                   value, created_by).value)
+                return bool(
+                    store.create_if_absent(
+                        req.src_ip, req.username, f"cmd-exists:{name}", value, created_by
+                    ).value
+                )
             return bool(store.create_global_if_absent(f"cmd-exists:{name}", value, created_by).value)
 
     def facts_contradictions(self, req: EscalationRequest, declared: dict[str, str]) -> list[str]:
@@ -297,11 +310,17 @@ class Db:
         with self.pool.connection() as conn:
             store = StateStore(conn, self.deid)
             for path, content in c.files:
-                store.create_if_absent(req.src_ip, req.username, f"file:{path}", {"content": content}, created_by)
+                store.create_if_absent(
+                    req.src_ip, req.username, f"file:{path}", {"content": content}, created_by
+                )
             for k, v in c.facts.items():
                 store.create_if_absent(req.src_ip, req.username, f"llm:{k}", v, created_by)
-            value = {"stdout": c.stdout, "stderr": c.stderr, "exit_code": c.exit_code,
-                     "files": [p for p, _ in c.files]}
+            value = {
+                "stdout": c.stdout,
+                "stderr": c.stderr,
+                "exit_code": c.exit_code,
+                "files": [p for p, _ in c.files],
+            }
             return store.create_if_absent(req.src_ip, req.username, out_key, value, created_by).value
 
     def session_files(self, src_ip: str, username: str) -> list[CreatedFile]:
@@ -324,6 +343,7 @@ class Db:
 # ---------------------------------------------------------------------------
 # The gateway
 # ---------------------------------------------------------------------------
+
 
 class Gateway:
     def __init__(self, cfg: GatewayConfig, db: Db, backend: Backend, persona: Persona):
@@ -353,16 +373,28 @@ class Gateway:
     async def escalate(self, req: EscalationRequest) -> ShellResult:
         t0 = time.perf_counter()
         deadline = t0 + self.cfg.deadline_s
-        stats = {"attempts": 0, "model_ms": 0, "prompt_tokens": None, "completion_tokens": None,
-                 "rejected_output": None}
+        stats = {
+            "attempts": 0,
+            "model_ms": 0,
+            "prompt_tokens": None,
+            "completion_tokens": None,
+            "rejected_output": None,
+        }
         reasons: list[str] = []
         argv0 = req.argv[0]
 
-        def finish(outcome: str, stdout: str, stderr: str, code: int,
-                   files: list[CreatedFile] | None = None) -> ShellResult:
-            return ShellResult(stdout=stdout, stderr=stderr, exit_code=code, files=files or [],
-                               outcome=outcome, reasons=reasons,
-                               latency_ms=int((time.perf_counter() - t0) * 1000))
+        def finish(
+            outcome: str, stdout: str, stderr: str, code: int, files: list[CreatedFile] | None = None
+        ) -> ShellResult:
+            return ShellResult(
+                stdout=stdout,
+                stderr=stderr,
+                exit_code=code,
+                files=files or [],
+                outcome=outcome,
+                reasons=reasons,
+                latency_ms=int((time.perf_counter() - t0) * 1000),
+            )
 
         result = await self._escalate(req, argv0, deadline, reasons, stats, finish)
         await self._log(req, result, stats)
@@ -400,7 +432,9 @@ class Gateway:
         if not self.buckets.allow(self.db.deid.ip(req.src_ip) or req.src_ip):
             reasons.append("rate_limited")
             return await self._fallback(req, name, installed, finish)
-        if not await self.concurrency.acquire(min(self.cfg.busy_wait_s, max(0.0, deadline - time.perf_counter()))):
+        if not await self.concurrency.acquire(
+            min(self.cfg.busy_wait_s, max(0.0, deadline - time.perf_counter()))
+        ):
             reasons.append("busy")
             return await self._fallback(req, name, installed, finish)
 
@@ -419,14 +453,15 @@ class Gateway:
                 return finish("not_installed", *not_found(argv0))
         elif not installed:
             stored = await self._db(self.db.pin_exists, req, name, True, self.backend.name)
-            if stored is False:   # another request pinned "absent" first
+            if stored is False:  # another request pinned "absent" first
                 return finish("not_installed", *not_found(argv0))
         value = await self._db(self.db.commit, req, out_key, accepted, self.backend.name)
         files = await self._db(self.db.file_contents, req, value.get("files", []))
         return finish("generated", value["stdout"], value["stderr"], value["exit_code"], files)
 
-    async def _generate(self, req, ctx: Context, installed: bool, deadline: float,
-                        reasons: list[str], stats: dict) -> Candidate | None:
+    async def _generate(
+        self, req, ctx: Context, installed: bool, deadline: float, reasons: list[str], stats: dict
+    ) -> Candidate | None:
         correction: str | None = None
         while stats["attempts"] < self.cfg.max_attempts:
             remaining = deadline - time.perf_counter()
@@ -440,7 +475,7 @@ class Gateway:
                 reply = await asyncio.wait_for(self.backend.generate(messages, schema, remaining), remaining)
             except (ModelError, TimeoutError) as exc:
                 reasons.append(f"model_error:{type(exc).__name__}")
-                return None      # a down or slow model will not get better within the deadline
+                return None  # a down or slow model will not get better within the deadline
             stats["model_ms"] += reply.model_ms
             stats["prompt_tokens"] = (stats["prompt_tokens"] or 0) + (reply.prompt_tokens or 0)
             stats["completion_tokens"] = (stats["completion_tokens"] or 0) + (reply.completion_tokens or 0)
@@ -456,7 +491,7 @@ class Gateway:
                 reasons.append("reasoning_stripped")
             problems = self.validator.clean(cand, req, reasons)
             if installed and not cand.exists:
-                problems.append("exists_mismatch")   # persona says it is installed
+                problems.append("exists_mismatch")  # persona says it is installed
             if not problems and cand.exists:
                 problems = await self._db(self.db.facts_contradictions, req, cand.facts)
             if not problems:
@@ -474,8 +509,11 @@ class Gateway:
         p = self.persona
         fixed = [f"hostname is {p.hostname}", f"the system is {p.os_pretty}", f"the kernel is {p.kernel}"]
         fixed += [f"{k} is {v}" for k, v in p.facts.items()]
-        fixed += [f"{k} is {ctx.facts[k]}" for k in (x.split(":", 1)[1] for x in problems
-                                                     if x.startswith("contradicts_fact:")) if k in ctx.facts]
+        fixed += [
+            f"{k} is {ctx.facts[k]}"
+            for k in (x.split(":", 1)[1] for x in problems if x.startswith("contradicts_fact:"))
+            if k in ctx.facts
+        ]
         return " These are fixed: " + "; ".join(fixed) + "."
 
     async def _fallback(self, req, name: str, installed: bool, finish) -> ShellResult:
@@ -522,8 +560,13 @@ async def lifespan(_app: FastAPI):
     global _gateway
     cfg = GatewayConfig.from_env()
     deid = Deidentifier.from_env()
-    pool = ConnectionPool(dsn_from_env(), open=True, min_size=1,
-                          max_size=int(os.environ.get("POOL_MAX", "10")), kwargs={"autocommit": True})
+    pool = ConnectionPool(
+        dsn_from_env(),
+        open=True,
+        min_size=1,
+        max_size=int(os.environ.get("POOL_MAX", "10")),
+        kwargs={"autocommit": True},
+    )
     with pool.connection() as conn:
         apply_schema(conn)
     _gateway = Gateway(cfg, Db(pool, deid), backend_from_env(), Persona.from_env())

@@ -52,7 +52,7 @@ class OllamaBackend(Backend):
     temperature: float = 0.2
     max_tokens: int = 768
     keep_alive: str = "30m"
-    think: bool | None = None   # only sent if set; older Ollama/models reject it
+    think: bool | None = None  # only sent if set; older Ollama/models reject it
 
     @property
     def name(self) -> str:
@@ -146,8 +146,9 @@ class OpenAIBackend(Backend):
     async def healthy(self) -> bool:
         try:
             async with httpx.AsyncClient(timeout=3) as client:
-                r = await client.get(f"{self.url.rstrip('/')}/v1/models",
-                                     headers={"Authorization": f"Bearer {self.api_key}"})
+                r = await client.get(
+                    f"{self.url.rstrip('/')}/v1/models", headers={"Authorization": f"Bearer {self.api_key}"}
+                )
                 return r.status_code == 200
         except httpx.HTTPError:
             return False
@@ -167,6 +168,12 @@ def backend_from_env() -> Backend:
         think = None if think_env is None else think_env.lower() in ("1", "true", "yes")
         return OllamaBackend(url, model, mode, temperature, max_tokens, think=think)
     if kind == "openai":
-        return OpenAIBackend(url, model, mode, temperature, max_tokens,
-                             api_key=os.environ.get("VULNMAZE_LLM_API_KEY", "unused"))
+        return OpenAIBackend(
+            url,
+            model,
+            mode,
+            temperature,
+            max_tokens,
+            api_key=os.environ.get("VULNMAZE_LLM_API_KEY", "unused"),
+        )
     raise ValueError(f"unknown VULNMAZE_LLM_BACKEND {kind!r}")

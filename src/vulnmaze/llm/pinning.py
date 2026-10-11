@@ -27,15 +27,29 @@ _OTHER_DISTROS = re.compile(
     r"\b(Ubuntu|CentOS|Fedora|Red Hat|RHEL|Alpine Linux|Arch Linux|Amazon Linux|Rocky Linux|AlmaLinux|"
     r"openSUSE|SUSE Linux|Kali|Raspbian|Linux Mint|Windows(?: Server)?)\b"
 )
-_CODENAMES = {"buster", "bullseye", "bookworm", "trixie", "stretch", "jessie",
-              "jammy", "focal", "noble", "bionic", "xenial", "kinetic", "lunar", "mantic"}
+_CODENAMES = {
+    "buster",
+    "bullseye",
+    "bookworm",
+    "trixie",
+    "stretch",
+    "jessie",
+    "jammy",
+    "focal",
+    "noble",
+    "bionic",
+    "xenial",
+    "kinetic",
+    "lunar",
+    "mantic",
+}
 _CODENAME = re.compile(r"\b(" + "|".join(sorted(_CODENAMES)) + r")\b", re.IGNORECASE)
 _DEBIAN_VERSION = re.compile(r"Debian GNU/Linux (\d+)")
 _KERNEL = re.compile(r"\b(\d+\.\d+\.\d+-\d+-(?:amd64|arm64|generic|cloud-amd64|rt-amd64|aws|azure))\b")
 _HOST_PATTERNS = [
-    re.compile(r"\b[a-z_][a-z0-9_-]*@([A-Za-z0-9][A-Za-z0-9-]{0,62}):[~/]"),   # shell prompt user@host:~
+    re.compile(r"\b[a-z_][a-z0-9_-]*@([A-Za-z0-9][A-Za-z0-9-]{0,62}):[~/]"),  # shell prompt user@host:~
     re.compile(r"^Linux ([A-Za-z0-9][A-Za-z0-9.-]{0,62}) \d+\.\d+", re.MULTILINE),  # uname -a
-    re.compile(r"Static hostname:\s*(\S+)"),                                       # hostnamectl
+    re.compile(r"Static hostname:\s*(\S+)"),  # hostnamectl
 ]
 _INET = re.compile(r"\binet (\d{1,3}(?:\.\d{1,3}){3})/\d+")
 

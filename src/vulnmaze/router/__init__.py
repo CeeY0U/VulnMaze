@@ -9,6 +9,11 @@ from .router import (
 )
 
 __all__ = [
-    "Decision", "Route", "classify_argv", "classify_line",
-    "is_sensitive_path", "split_pipeline", "strictest",
+    "Decision",
+    "Route",
+    "classify_argv",
+    "classify_line",
+    "is_sensitive_path",
+    "split_pipeline",
+    "strictest",
 ]

@@ -35,8 +35,11 @@ ALIASES: dict[str, str] = {}
 
 
 def _open(path: str):
-    return gzip.open(path, "rt", encoding="utf-8", errors="replace") if path.endswith(".gz") else \
-        open(path, encoding="utf-8", errors="replace")
+    return (
+        gzip.open(path, "rt", encoding="utf-8", errors="replace")
+        if path.endswith(".gz")
+        else open(path, encoding="utf-8", errors="replace")
+    )
 
 
 def iter_events(path: str) -> Iterator[str]:
@@ -55,7 +58,7 @@ def iter_events(path: str) -> Iterator[str]:
                 try:
                     rec = json.loads(line)
                 except json.JSONDecodeError:
-                    yield line          # the ingester records it in ingest_errors
+                    yield line  # the ingester records it in ingest_errors
                     continue
                 yield from _rewrite(rec)
         for rec in records:
@@ -70,7 +73,9 @@ def _rewrite(rec) -> Iterator[str]:
         yield json.dumps(rec, sort_keys=True)
 
 
-def load(conn: psycopg.Connection, name: str, paths: list[str], deid: Deidentifier, batch: int = 5000) -> dict:
+def load(
+    conn: psycopg.Connection, name: str, paths: list[str], deid: Deidentifier, batch: int = 5000
+) -> dict:
     ingestor = Ingestor(conn, deid, source=f"public:{name}")
     for path in paths:
         buf: list[str] = []

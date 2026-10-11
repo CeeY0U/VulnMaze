@@ -19,10 +19,10 @@ import statistics
 from datetime import datetime
 from typing import Any
 
-DIGEST_VERSION = 2   # adds "llm" counts and commands[].llm
-MAX_LOGIN_ATTEMPTS_KEPT = 200   # brute-force sessions: keep counting, stop listing
+DIGEST_VERSION = 2  # adds "llm" counts and commands[].llm
+MAX_LOGIN_ATTEMPTS_KEPT = 200  # brute-force sessions: keep counting, stop listing
 MAX_COMMANDS_KEPT = 2000
-SUBSHELL_WINDOW_S = 0.1         # piped-to-shell commands arrive within a few ms
+SUBSHELL_WINDOW_S = 0.1  # piped-to-shell commands arrive within a few ms
 _URL = re.compile(r"\b(?:https?|ftp|tftp)://[^\s'\"<>|;]+", re.I)
 _SHELLS = {"bash", "sh", "dash", "zsh", "ash"}
 
@@ -48,8 +48,16 @@ def new_digest(source: str, session: str) -> dict[str, Any]:
         "urls": [],
         "files": {"downloads": [], "uploads": []},
         "routes": {"privilege": 0, "deterministic": 0, "escalate_candidate": 0},
-        "llm": {"calls": 0, "generated": 0, "pinned": 0, "not_installed": 0, "refused": 0,
-                "fallback": 0, "gateway_unreachable": 0, "latency_ms_total": 0},
+        "llm": {
+            "calls": 0,
+            "generated": 0,
+            "pinned": 0,
+            "not_installed": 0,
+            "refused": 0,
+            "fallback": 0,
+            "gateway_unreachable": 0,
+            "latency_ms_total": 0,
+        },
         "timing": {"login_to_first_cmd_s": None, "gaps_s": [], "gap_mean_s": None, "gap_std_s": None},
         "counts": {"events": 0, "commands": 0, "failed_commands": 0, "nested_commands": 0},
         "ttylog_shasum": None,
@@ -109,13 +117,15 @@ def apply(digest: dict[str, Any], event: dict[str, Any], *, inplace: bool = Fals
         logins = d["logins"]
         logins["n_success" if ok else "n_failed"] += 1
         if len(logins["attempts"]) < MAX_LOGIN_ATTEMPTS_KEPT:
-            logins["attempts"].append({
-                "ts": ts,
-                "username": event.get("username"),
-                "password_hmac": event.get("password_hmac"),
-                "password_len": event.get("password_len"),
-                "success": ok,
-            })
+            logins["attempts"].append(
+                {
+                    "ts": ts,
+                    "username": event.get("username"),
+                    "password_hmac": event.get("password_hmac"),
+                    "password_len": event.get("password_len"),
+                    "success": ok,
+                }
+            )
         if ok:
             logins["username"] = event.get("username")
             st["login_ts"] = ts
@@ -126,9 +136,9 @@ def apply(digest: dict[str, Any], event: dict[str, Any], *, inplace: bool = Fals
         nested = bool(st["subshell_until"] and ts <= st["subshell_until"])
         cmd = {"ts": ts, "input": text, "failed": False, "routes": []}
         if realm:
-            cmd["realm"] = realm      # stdin typed into a running command (passwd, cat, ...)
+            cmd["realm"] = realm  # stdin typed into a running command (passwd, cat, ...)
         if nested:
-            cmd["nested"] = True      # produced by `... | bash`, not typed
+            cmd["nested"] = True  # produced by `... | bash`, not typed
             d["counts"]["nested_commands"] += 1
             # a piped script can hold several lines; keep the window open
             until = _ts(event).timestamp() + SUBSHELL_WINDOW_S
@@ -175,14 +185,18 @@ def apply(digest: dict[str, Any], event: dict[str, Any], *, inplace: bool = Fals
             d["commands"][-1].setdefault("llm", []).append(outcome)
 
     elif eid in ("cowrie.session.file_download", "cowrie.session.file_download.failed"):
-        d["files"]["downloads"].append({
-            "ts": ts,
-            "url": event.get("url"),
-            "shasum": event.get("shasum"),
-            "ok": eid == "cowrie.session.file_download",
-        })
+        d["files"]["downloads"].append(
+            {
+                "ts": ts,
+                "url": event.get("url"),
+                "shasum": event.get("shasum"),
+                "ok": eid == "cowrie.session.file_download",
+            }
+        )
     elif eid == "cowrie.session.file_upload":
-        d["files"]["uploads"].append({"ts": ts, "filename": event.get("filename"), "shasum": event.get("shasum")})
+        d["files"]["uploads"].append(
+            {"ts": ts, "filename": event.get("filename"), "shasum": event.get("shasum")}
+        )
 
     elif eid == "cowrie.log.closed":
         d["ttylog_shasum"] = event.get("shasum")
@@ -192,7 +206,7 @@ def apply(digest: dict[str, Any], event: dict[str, Any], *, inplace: bool = Fals
         d["end_ts"] = ts
         if event.get("duration_ms") is not None:
             d["duration_s"] = round(event["duration_ms"] / 1000, 3)
-        elif event.get("duration") is not None:          # older Cowrie versions
+        elif event.get("duration") is not None:  # older Cowrie versions
             d["duration_s"] = round(float(event["duration"]), 3)
 
     return d

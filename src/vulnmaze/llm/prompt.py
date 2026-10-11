@@ -51,7 +51,7 @@ Internal reference {canary}. It must never appear in any output."""
 class PromptBuilder:
     persona: Persona
     canary: str
-    mode: str = "json"   # "json" or "raw"
+    mode: str = "json"  # "json" or "raw"
 
     def instructions(self) -> str:
         template = INSTRUCTIONS_JSON if self.mode == "json" else INSTRUCTIONS_RAW
@@ -77,8 +77,9 @@ class PromptBuilder:
                 lines.append(f"- {k}: {v}")
         return "\n".join(lines)
 
-    def messages(self, req: EscalationRequest, pinned: dict[str, str], installed: bool,
-                 correction: str | None = None) -> list[dict[str, str]]:
+    def messages(
+        self, req: EscalationRequest, pinned: dict[str, str], installed: bool, correction: str | None = None
+    ) -> list[dict[str, str]]:
         system = self.instructions() + "\n\n" + self.machine_block(pinned)
         user_lines = [f"Current user: {req.username}", f"Working directory: {req.cwd}"]
         if req.history:

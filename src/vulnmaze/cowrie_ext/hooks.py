@@ -144,13 +144,17 @@ def install() -> None:
     HoneyPotShell._run_expanded = _run_expanded
 
     if escalation.CONFIG.enabled:
+
         def getCommand(self, cmd, paths, cwd):  # noqa: N802 (Cowrie's name)
             found = cowrie_answers(self, cmd, paths, cwd)
             if found is not None:
                 return found
             try:
-                if (getattr(self, "_vulnmaze_escalatable", None) and self._vulnmaze_escalatable.get(cmd)
-                        and escalation.escalatable_name(cmd)):
+                if (
+                    getattr(self, "_vulnmaze_escalatable", None)
+                    and self._vulnmaze_escalatable.get(cmd)
+                    and escalation.escalatable_name(cmd)
+                ):
                     return escalation.make_command(cmd)
             except Exception:
                 log.failure("VulnMaze escalation lookup failed")
@@ -161,5 +165,8 @@ def install() -> None:
         escalation.install_session_files_hook()
 
     _installed = True
-    log.info("VulnMaze hooks installed ({n} extra commands, escalation={e})",
-             n=len(extra_commands), e=escalation.CONFIG.mode)
+    log.info(
+        "VulnMaze hooks installed ({n} extra commands, escalation={e})",
+        n=len(extra_commands),
+        e=escalation.CONFIG.mode,
+    )

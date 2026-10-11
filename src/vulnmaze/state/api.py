@@ -29,8 +29,13 @@ _deid: Deidentifier | None = None
 async def lifespan(_app: FastAPI):
     global _pool, _deid
     _deid = Deidentifier.from_env()
-    _pool = ConnectionPool(dsn_from_env(), open=True, min_size=1, max_size=int(os.environ.get("POOL_MAX", "10")),
-                           kwargs={"autocommit": True})
+    _pool = ConnectionPool(
+        dsn_from_env(),
+        open=True,
+        min_size=1,
+        max_size=int(os.environ.get("POOL_MAX", "10")),
+        kwargs={"autocommit": True},
+    )
     with _pool.connection() as conn:
         apply_schema(conn)
     yield

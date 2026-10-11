@@ -39,7 +39,7 @@ HISTORY = 15
 SESSION_FILES_TIMEOUT = float(os.environ.get("VULNMAZE_SESSION_FILES_TIMEOUT", "2"))
 # Used when the gateway cannot be reached. A transient error never claims
 # the program exists or does not, so it cannot contradict a pinned answer.
-EOF = object()   # marker for a held end-of-input
+EOF = object()  # marker for a held end-of-input
 LOCAL_FALLBACK = "-bash: fork: Resource temporarily unavailable\n"
 
 
@@ -80,7 +80,8 @@ def escalatable_name(cmd: str) -> bool:
     `./x` or `/tmp/x` are the attacker's own files: never the model's to invent."""
     if "/" in cmd:
         return posixpath.dirname(posixpath.normpath(cmd)) in BIN_DIRS and bool(
-            _NAME.match(posixpath.basename(cmd)))
+            _NAME.match(posixpath.basename(cmd))
+        )
     return bool(_NAME.match(cmd))
 
 
@@ -122,8 +123,10 @@ def make_command(name: str):
             self._t0 = time.monotonic()
             session, src_ip = _identity(self.protocol)
             login = getattr(getattr(self.protocol, "user", None), "username", "root")
-            history = [h.decode("utf-8", "replace") if isinstance(h, bytes) else str(h)
-                       for h in getattr(self.protocol, "historyLines", [])[-HISTORY - 1:-1]]
+            history = [
+                h.decode("utf-8", "replace") if isinstance(h, bytes) else str(h)
+                for h in getattr(self.protocol, "historyLines", [])[-HISTORY - 1 : -1]
+            ]
             stdin = None
             if self.input_data:
                 stdin = self.input_data[:MAX_STDIN].decode("utf-8", "replace")
@@ -138,8 +141,12 @@ def make_command(name: str):
                 "history": history,
             }
             try:
-                d = treq.post(f"{CONFIG.url}/v1/escalate", json=payload, timeout=CONFIG.timeout,
-                              headers={"Authorization": f"Bearer {CONFIG.token}"})
+                d = treq.post(
+                    f"{CONFIG.url}/v1/escalate",
+                    json=payload,
+                    timeout=CONFIG.timeout,
+                    headers={"Authorization": f"Bearer {CONFIG.token}"},
+                )
             except Exception as exc:  # treq can raise before returning a Deferred
                 self._failed(exc)
                 return
@@ -156,7 +163,9 @@ def make_command(name: str):
             if self.exited:
                 return
             for f in data.get("files") or []:
-                materialise(self.fs, f["path"], f["content"], self.user.get("uid", 0), self.user.get("gid", 0))
+                materialise(
+                    self.fs, f["path"], f["content"], self.user.get("uid", 0), self.user.get("gid", 0)
+                )
             if data.get("stdout"):
                 self.write(data["stdout"])
             if data.get("stderr"):
@@ -242,9 +251,12 @@ def install_session_files_hook() -> None:
             _, src_ip = _identity(self)
             username = self.user.username
             uid, gid = getattr(self.user, "uid", 0), getattr(self.user, "gid", 0)
-            d = treq.get(f"{CONFIG.url}/v1/session-files", params={"src_ip": src_ip, "username": username},
-                         headers={"Authorization": f"Bearer {CONFIG.token}"},
-                         timeout=SESSION_FILES_TIMEOUT)
+            d = treq.get(
+                f"{CONFIG.url}/v1/session-files",
+                params={"src_ip": src_ip, "username": username},
+                headers={"Authorization": f"Bearer {CONFIG.token}"},
+                timeout=SESSION_FILES_TIMEOUT,
+            )
             d.addCallback(lambda r: treq.json_content(r) if r.code == 200 else [])
 
             def load(files):
