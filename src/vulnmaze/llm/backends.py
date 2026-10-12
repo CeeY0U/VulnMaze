@@ -51,7 +51,7 @@ class OllamaBackend(Backend):
     model: str
     mode: str = "json"
     temperature: float = 0.2
-    max_tokens: int = 400
+    max_tokens: int = 800
     num_ctx: int = 4096
     keep_alive: str = "-1m"
     think: bool | None = None  # only sent if set; older Ollama/models reject it
@@ -110,7 +110,7 @@ class OpenAIBackend(Backend):
     model: str
     mode: str = "json"
     temperature: float = 0.2
-    max_tokens: int = 400
+    max_tokens: int = 800
     api_key: str = "unused"
 
     @property
@@ -164,12 +164,12 @@ class OpenAIBackend(Backend):
 def backend_from_env() -> Backend:
     kind = os.environ.get("VULNMAZE_LLM_BACKEND", "ollama")
     url = os.environ.get("VULNMAZE_LLM_URL", "http://ollama:11434")
-    model = os.environ.get("VULNMAZE_LLM_MODEL", "llama3.1:8b")
+    model = os.environ.get("VULNMAZE_LLM_MODEL", "qwen3.5:4b")
     mode = os.environ.get("VULNMAZE_LLM_MODE", "json")
     if mode not in ("json", "raw"):
         raise ValueError("VULNMAZE_LLM_MODE must be json or raw")
     temperature = float(os.environ.get("VULNMAZE_LLM_TEMPERATURE", "0.2"))
-    max_tokens = int(os.environ.get("VULNMAZE_LLM_MAX_TOKENS", "400"))
+    max_tokens = int(os.environ.get("VULNMAZE_LLM_MAX_TOKENS", "800"))
     if kind == "ollama":
         think_env = os.environ.get("VULNMAZE_LLM_THINK")
         think = None if think_env is None else think_env.lower() in ("1", "true", "yes")

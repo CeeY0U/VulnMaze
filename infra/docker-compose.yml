@@ -151,10 +151,11 @@ services:
       VULNMAZE_ESCALATION: ${VULNMAZE_ESCALATION:-off}
       VULNMAZE_LLM_BACKEND: ${VULNMAZE_LLM_BACKEND:-ollama}
       VULNMAZE_LLM_URL: ${VULNMAZE_LLM_URL:-http://ollama:11434}
-      VULNMAZE_LLM_MODEL: ${VULNMAZE_LLM_MODEL:-llama3.1:8b}
+      VULNMAZE_LLM_MODEL: ${VULNMAZE_LLM_MODEL:-qwen3.5:4b}
       VULNMAZE_LLM_MODE: ${VULNMAZE_LLM_MODE:-json}
+      VULNMAZE_LLM_THINK: ${VULNMAZE_LLM_THINK:-false}
       VULNMAZE_LLM_DEADLINE_S: ${VULNMAZE_LLM_DEADLINE_S:-15}
-      VULNMAZE_LLM_MAX_TOKENS: ${VULNMAZE_LLM_MAX_TOKENS:-400}
+      VULNMAZE_LLM_MAX_TOKENS: ${VULNMAZE_LLM_MAX_TOKENS:-800}
       VULNMAZE_LLM_NUM_CTX: ${VULNMAZE_LLM_NUM_CTX:-4096}
       VULNMAZE_LLM_CONCURRENCY: ${VULNMAZE_LLM_CONCURRENCY:-2}
     volumes:
@@ -195,7 +196,7 @@ services:
     entrypoint: ["/bin/sh", "-c"]
     command: ["ollama serve & sleep 5 && ollama pull $${VULNMAZE_LLM_MODEL} && ollama list"]
     environment:
-      VULNMAZE_LLM_MODEL: ${VULNMAZE_LLM_MODEL:-llama3.1:8b}
+      VULNMAZE_LLM_MODEL: ${VULNMAZE_LLM_MODEL:-qwen3.5:4b}
     volumes:
       - ollama-models:/root/.ollama
     networks: [egress]
