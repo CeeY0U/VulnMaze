@@ -5,7 +5,7 @@ import pytest
 
 from vulnmaze.llm import sanitize
 from vulnmaze.llm.backends import ModelError, ModelReply
-from vulnmaze.llm.gateway import Context, Gateway, GatewayConfig, parse_reply
+from vulnmaze.llm.gateway import HINTS, Context, Gateway, GatewayConfig, parse_reply
 from vulnmaze.llm.schema import CreatedFile, EscalationRequest
 
 
@@ -59,10 +59,12 @@ class FakeBackend:
         """Queue the replies to return, one per call."""
         self.replies = list(replies)
         self.calls = 0
+        self.prompts = []
 
     async def generate(self, messages, schema, timeout):
         """Return the next scripted reply."""
         self.calls += 1
+        self.prompts.append(messages[-1]["content"])
         reply = self.replies.pop(0)
         if isinstance(reply, Exception):
             raise reply
@@ -289,3 +291,25 @@ def test_no_warmup_when_escalation_is_off(persona, deid):
     gw = Gateway(GatewayConfig(token="t" * 16, canary="ref-canary", escalation=False), FakeDb(deid), WarmingBackend(), persona)
     gw.ensure_warming()
     assert gw.warm_task is None and not gw.warm_failed
+
+
+@pytest.mark.parametrize(
+    "first, reason",
+    [
+        (answer(""), "empty_output"),
+        ("not json", "invalid_output:not_json"),
+        (answer(stderr="-bash: lsblk: command not found\n", exit_code=127, exists=False), "exists_mismatch"),
+    ],
+)
+def test_retry_prompt_carries_the_hint_for_the_rejection(persona, deid, first, reason):
+    """A rejected answer is retried with the hint defined for its reason."""
+    backend = FakeBackend(first, answer("NAME MAJ:MIN\n"))
+    run(persona, deid, ["lsblk"], backend)
+    assert HINTS[reason] in backend.prompts[1]
+
+
+def test_retry_prompt_has_no_hint_for_a_leak(persona, deid):
+    """A leaking answer gets no hint, so the retry never names what leaked."""
+    backend = FakeBackend(answer("As an AI language model I cannot run lsblk"), answer("NAME MAJ:MIN\n"))
+    run(persona, deid, ["lsblk"], backend)
+    assert not any(hint in backend.prompts[1] for hint in HINTS.values())
