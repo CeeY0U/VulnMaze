@@ -53,6 +53,7 @@ class FakeBackend:
 
     name = "fake:model"
     mode = "json"
+    needs_warmup = False
 
     def __init__(self, *replies):
         """Queue the replies to return, one per call."""
@@ -161,3 +162,130 @@ def test_parse_reply_modes():
         parse_reply("not json", "json")
     with pytest.raises(sanitize.Rejected):
         parse_reply(json.dumps(answer(exit_code=300)), "json")
+
+
+class WarmingBackend(FakeBackend):
+    """A model that is loaded by a request with no messages, as Ollama does."""
+
+    needs_warmup = True
+
+    def __init__(self, *replies):
+        """Queue replies; load requests are counted separately."""
+        super().__init__(*replies)
+        self.loads = 0
+
+    async def generate(self, messages, schema, timeout):
+        """Count load requests, and answer the others with the next scripted reply."""
+        if not messages:
+            self.loads += 1
+            return ModelReply(text="", model_ms=5)
+        return await super().generate(messages, schema, timeout)
+
+    async def healthy(self):
+        """Report the model as loaded once a load request has been made."""
+        return self.loads > 0
+
+
+def warming_gateway(persona, deid, backend):
+    """A gateway on fakes with a model that still has to be loaded."""
+    gw = Gateway(GatewayConfig(token="t" * 16, canary="ref-canary"), FakeDb(deid), backend, persona)
+    req = EscalationRequest(session="s1", src_ip="198.51.100.9", username="root", argv=["lsblk"])
+    return gw, req
+
+
+def test_requests_fall_back_until_the_model_is_loaded(persona, deid):
+    """While the model loads, requests get a fallback without a model call, then generation resumes."""
+    backend = WarmingBackend(answer("NAME MAJ:MIN\n"))
+    gw, req = warming_gateway(persona, deid, backend)
+
+    async def scenario():
+        first = await gw.escalate(req)
+        await gw.warm_task
+        return first, await gw.escalate(req)
+
+    first, second = asyncio.run(scenario())
+    assert first.outcome == "fallback" and "model_loading" in first.reasons
+    assert backend.loads == 1 and backend.calls == 1
+    assert second.outcome == "generated" and gw.model_ready
+
+
+def test_model_error_reloads_an_unloaded_model(persona, deid):
+    """A model error when the model is no longer loaded starts a reload."""
+    backend = WarmingBackend(ModelError("down"))
+    gw, req = warming_gateway(persona, deid, backend)
+    gw.model_ready = True
+
+    async def scenario():
+        result = await gw.escalate(req)
+        await gw.warm_task
+        return result
+
+    result = asyncio.run(scenario())
+    assert result.outcome == "fallback" and backend.loads == 1 and gw.model_ready
+
+
+def test_slow_answer_does_not_reload_a_loaded_model(persona, deid):
+    """A timeout while the model is still loaded keeps sending requests to it."""
+    backend = WarmingBackend(TimeoutError(), answer("NAME MAJ:MIN\n"))
+    backend.loads = 1
+    gw, req = warming_gateway(persona, deid, backend)
+    gw.model_ready = True
+    first, second = asyncio.run(gw.escalate(req)), asyncio.run(gw.escalate(req))
+    assert first.outcome == "fallback" and second.outcome == "generated"
+    assert gw.warm_task is None and backend.loads == 1
+
+
+def test_hanging_load_is_cut_off_by_the_warmup_timeout(persona, deid, caplog):
+    """A load that never finishes ends at the warm-up timeout, and the model stays not ready."""
+
+    class HangingBackend(WarmingBackend):
+        async def generate(self, messages, schema, timeout):
+            await asyncio.sleep(60)
+
+    gw = Gateway(
+        GatewayConfig(token="t" * 16, canary="ref-canary", warmup_timeout_s=0.05),
+        FakeDb(deid),
+        HangingBackend(),
+        persona,
+    )
+
+    async def scenario():
+        gw.ensure_warming()
+        await asyncio.sleep(0.2)
+        gw.warm_task.cancel()
+
+    asyncio.run(scenario())
+    assert not gw.model_ready and "could not load model" in caplog.text
+
+
+def test_warmup_gives_up_after_the_configured_attempts(persona, deid, monkeypatch):
+    """A model that never loads is reported as failed after N attempts, and requests stop retrying it."""
+
+    class BrokenBackend(WarmingBackend):
+        async def generate(self, messages, schema, timeout):
+            self.loads += 1
+            raise ModelError("model not found")
+
+    async def no_wait(_delay):
+        return None
+
+    monkeypatch.setattr(asyncio, "sleep", no_wait)
+    backend = BrokenBackend()
+    gw = Gateway(GatewayConfig(token="t" * 16, canary="ref-canary", warmup_attempts=3), FakeDb(deid), backend, persona)
+    req = EscalationRequest(session="s1", src_ip="198.51.100.9", username="root", argv=["lsblk"])
+
+    async def scenario():
+        gw.ensure_warming()
+        await gw.warm_task
+        return await gw.escalate(req)
+
+    result = asyncio.run(scenario())
+    assert gw.warm_failed and backend.loads == 3
+    assert result.outcome == "fallback" and "model_failed" in result.reasons and gw.warm_task.done()
+
+
+def test_no_warmup_when_escalation_is_off(persona, deid):
+    """With escalation off the gateway never loads the model, so a missing model is not a failure."""
+    gw = Gateway(GatewayConfig(token="t" * 16, canary="ref-canary", escalation=False), FakeDb(deid), WarmingBackend(), persona)
+    gw.ensure_warming()
+    assert gw.warm_task is None and not gw.warm_failed

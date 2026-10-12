@@ -10,7 +10,7 @@ Configuration (environment variables of the Cowrie container):
     VULNMAZE_ESCALATION       off (default) | all
     VULNMAZE_GATEWAY_URL      http://llm-gateway:8090
     VULNMAZE_GATEWAY_TOKEN    shared secret with the gateway
-    VULNMAZE_GATEWAY_TIMEOUT  seconds before the local fallback (default 10)
+    VULNMAZE_GATEWAY_TIMEOUT  seconds before the local fallback (default 17)
 
 "all" means every eligible stage is escalated.
 
@@ -68,7 +68,7 @@ class Config:
             mode=mode,
             url=os.environ.get("VULNMAZE_GATEWAY_URL", "http://llm-gateway:8090").rstrip("/"),
             token=token,
-            timeout=float(os.environ.get("VULNMAZE_GATEWAY_TIMEOUT", "10")),
+            timeout=float(os.environ.get("VULNMAZE_GATEWAY_TIMEOUT", "17")),
         )
 
 

@@ -38,7 +38,7 @@ import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Response
 from psycopg_pool import ConnectionPool
 
 from vulnmaze.common.deid import Deidentifier
@@ -93,13 +93,16 @@ def transient_failure() -> tuple[str, str, int]:
 @dataclass
 class GatewayConfig:
     token: str
-    deadline_s: float = 8.0
+    deadline_s: float = 15.0
     max_attempts: int = 2
     min_attempt_s: float = 1.0
     per_attacker_per_min: float = 20
     burst: int = 10
     concurrency: int = 2
     busy_wait_s: float = 1.0
+    warmup_timeout_s: float = 300.0
+    warmup_attempts: int = 5
+    escalation: bool = True
     canary: str = field(default_factory=lambda: "ref-" + secrets.token_hex(6))
 
     @classmethod
@@ -110,12 +113,15 @@ class GatewayConfig:
         env = os.environ.get
         return cls(
             token=token,
-            deadline_s=float(env("VULNMAZE_LLM_DEADLINE_S", "8")),
+            deadline_s=float(env("VULNMAZE_LLM_DEADLINE_S", "15")),
             max_attempts=int(env("VULNMAZE_LLM_MAX_ATTEMPTS", "2")),
             per_attacker_per_min=float(env("VULNMAZE_LLM_PER_ATTACKER_PER_MIN", "20")),
             burst=int(env("VULNMAZE_LLM_BURST", "10")),
             concurrency=int(env("VULNMAZE_LLM_CONCURRENCY", "2")),
             busy_wait_s=float(env("VULNMAZE_LLM_BUSY_WAIT_S", "1")),
+            warmup_timeout_s=float(env("VULNMAZE_LLM_WARMUP_TIMEOUT_S", "300")),
+            warmup_attempts=int(env("VULNMAZE_LLM_WARMUP_ATTEMPTS", "5")),
+            escalation=env("VULNMAZE_ESCALATION", "off").strip().lower() != "off",
             canary=env("VULNMAZE_LLM_CANARY") or "ref-" + secrets.token_hex(6),
         )
 
@@ -355,6 +361,46 @@ class Gateway:
         self.validator = Validator(persona, self.prompts)
         self.buckets = TokenBuckets(cfg.per_attacker_per_min, cfg.burst)
         self.concurrency = Concurrency(cfg.concurrency)
+        self.model_ready = not backend.needs_warmup
+        self.warm_task: asyncio.Task | None = None
+        self.warm_failed = False
+
+    def ensure_warming(self) -> None:
+        """Load the model in the background, with no deadline, unless it is loaded, loading or failed."""
+        if not self.cfg.escalation or self.model_ready or self.warm_failed:
+            return
+        if self.warm_task is not None and not self.warm_task.done():
+            return
+        self.warm_task = asyncio.create_task(self._warm())
+
+    async def _warm(self) -> None:
+        delay = 5.0
+        for attempt in range(1, self.cfg.warmup_attempts + 1):
+            t0 = time.perf_counter()
+            try:
+                timeout = self.cfg.warmup_timeout_s
+                await asyncio.wait_for(self.backend.generate([], None, timeout), timeout)
+                self.model_ready = True
+                log.info("model loaded: %s in %.1f s", self.backend.name, time.perf_counter() - t0)
+                return
+            except (ModelError, TimeoutError) as exc:
+                log.warning(
+                    "could not load model %s (attempt %d/%d): %r",
+                    self.backend.name,
+                    attempt,
+                    self.cfg.warmup_attempts,
+                    exc,
+                )
+            if attempt < self.cfg.warmup_attempts:
+                await asyncio.sleep(delay)
+                delay = min(delay * 2, 60.0)
+        self.warm_failed = True
+        log.error(
+            "model %s failed to load after %d attempts; escalated commands get the fallback "
+            "until the gateway is restarted",
+            self.backend.name,
+            self.cfg.warmup_attempts,
+        )
 
     # -- helpers --------------------------------------------------------------
 
@@ -429,6 +475,10 @@ class Gateway:
             return finish("pinned", p["stdout"], p["stderr"], p["exit_code"], files)
 
         # 4. limits
+        if not self.model_ready:
+            reasons.append("model_failed" if self.warm_failed else "model_loading")
+            self.ensure_warming()
+            return await self._fallback(req, name, installed, finish)
         if not self.buckets.allow(self.db.deid.ip(req.src_ip) or req.src_ip):
             reasons.append("rate_limited")
             return await self._fallback(req, name, installed, finish)
@@ -475,6 +525,9 @@ class Gateway:
                 reply = await asyncio.wait_for(self.backend.generate(messages, schema, remaining), remaining)
             except (ModelError, TimeoutError) as exc:
                 reasons.append(f"model_error:{type(exc).__name__}")
+                if self.backend.needs_warmup and not await self.backend.healthy():
+                    self.model_ready = False
+                    self.ensure_warming()
                 return None  # a down or slow model will not get better within the deadline
             stats["model_ms"] += reply.model_ms
             stats["prompt_tokens"] = (stats["prompt_tokens"] or 0) + (reply.prompt_tokens or 0)
@@ -571,7 +624,10 @@ async def lifespan(_app: FastAPI):
         apply_schema(conn)
     _gateway = Gateway(cfg, Db(pool, deid), backend_from_env(), Persona.from_env())
     log.info("gateway ready: backend=%s mode=%s", _gateway.backend.name, _gateway.backend.mode)
+    _gateway.ensure_warming()
     yield
+    if _gateway.warm_task is not None:
+        _gateway.warm_task.cancel()
     pool.close()
 
 
@@ -585,9 +641,16 @@ def require_token(authorization: str = Header(default="")) -> None:
 
 
 @app.get("/healthz")
-async def healthz() -> dict:
+async def healthz(response: Response) -> dict:
     assert _gateway is not None
-    return {"ok": True, "backend": _gateway.backend.name, "model_ready": await _gateway.backend.healthy()}
+    if _gateway.warm_failed:
+        response.status_code = 503
+    return {
+        "ok": not _gateway.warm_failed,
+        "backend": _gateway.backend.name,
+        "model_ready": _gateway.model_ready and await _gateway.backend.healthy(),
+        "model_failed": _gateway.warm_failed,
+    }
 
 
 @app.post("/v1/escalate", dependencies=[Depends(require_token)], response_model=ShellResult)
