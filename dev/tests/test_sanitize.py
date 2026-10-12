@@ -45,6 +45,20 @@ def test_tells():
     assert sanitize.tells("total 0\n", "ls: cannot access 'x': No such file or directory\n") == []
 
 
+@pytest.mark.parametrize("stdout", ["OK\n", "Okay\n", "OK\nOK\n", "ok 1 - test passed\n"])
+def test_real_output_starting_with_ok_is_not_a_tell(stdout):
+    """Programs such as redis-cli print OK first; that is terminal output, not a preamble."""
+    assert sanitize.tells(stdout, "") == []
+
+
+@pytest.mark.parametrize(
+    "stdout", ["Sure, here is the output:\ntotal 0\n", "Sure, done\n", "OK, here you go\n", "Okay! Running it now\n"]
+)
+def test_chatty_preambles_are_tells(stdout):
+    """An acknowledgement followed by a comma, an exclamation mark or prose is a chatty preamble."""
+    assert sanitize.tells(stdout, "") == ["tell_s1c_preamble_stdout"]
+
+
 def test_output_denylist():
     """Shadow hashes, private keys and sudoers rules never reach the attacker."""
     assert sanitize.denylisted_content("root:$6$salt$hash:19000:0:99999:7:::") == ["denylist_shadow_hash"]

@@ -135,8 +135,8 @@ S1B_PATTERNS: list[tuple[str, re.Pattern]] = [
 ]
 
 S1C_PREAMBLE = re.compile(
-    r"^\s*(?:sure|certainly|of course|okay|ok|alright|here(?:'s| is| are)|below is|"
-    r"the (?:output|result|response) (?:is|of|would)|this command|output\s*:|result\s*:|as requested)\b",
+    r"^\s*(?:(?:okay|ok)\s*[,!]|(?:sure|certainly|of course|alright|here(?:'s| is| are)|below is|"
+    r"the (?:output|result|response) (?:is|of|would)|this command|output\s*:|result\s*:|as requested)\b)",
     re.IGNORECASE,
 )
 S1C_EXPLANATION = re.compile(r"^\s*(?:note|explanation|analysis|reasoning)\s*:", re.IGNORECASE | re.MULTILINE)
