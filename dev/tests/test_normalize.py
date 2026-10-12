@@ -38,9 +38,30 @@ def test_timestamps_are_always_utc():
     """ISO strings with Z, naive strings and epoch numbers all become aware UTC datetimes."""
     expected = datetime(2026, 10, 1, tzinfo=UTC)
     assert parse_ts({"timestamp": "2026-10-01T00:00:00Z"}) == expected
+    assert parse_ts({"timestamp": "2026-10-01T00:00:00.123456Z"}).microsecond == 123456
     assert parse_ts({"timestamp": "2026-10-01T08:00:00+08:00"}) == expected
     assert parse_ts({"timestamp": "2026-10-01T00:00:00"}) == expected
     assert parse_ts({"time": expected.timestamp()}) == expected
+    assert parse_ts({"timestamp": 0}).year == 1970
+
+
+def test_a_recorded_session_holds_no_raw_ip_or_password(fixtures, deid):
+    """The whole recorded session, normalised end to end, leaks no address or credential."""
+    secrets: dict[str, SessionSecrets] = {}
+    rows = []
+    for line in (fixtures / "cowrie_session_basic.jsonl").read_text().splitlines():
+        event = json.loads(line)
+        rows.append(normalise(event, line, deid, secrets.setdefault(event["session"], SessionSecrets())))
+    blob = json.dumps([r.as_dict() for r in rows])
+    assert "203.0.113.7" not in blob
+    assert "192.0.2.10" not in blob  # our own sensor address
+    assert "S3cretPass!" not in blob
+    # the password echoed inside a command was scrubbed, not dropped
+    chpasswd = next(r for r in rows if r.eventid == "cowrie.command.input" and r.input and "chpasswd" in r.input)
+    assert REDACTED in chpasswd.input
+    login = next(r for r in rows if r.eventid == "cowrie.login.success")
+    assert login.password_hmac == deid.secret("S3cretPass!")
+    assert login.password_len == len("S3cretPass!")
 
 
 def test_event_hash_ignores_surrounding_whitespace():

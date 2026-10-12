@@ -5,6 +5,7 @@ import pytest
 
 from vulnmaze.llm.persona import Persona
 from vulnmaze.llm.pinning import PersonaChecker, fact_contradictions
+from vulnmaze.router.known_commands import KNOWN_COMMANDS
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -16,11 +17,26 @@ def test_persona_matches_cowrie_config(persona):
     assert cfg["honeypot"]["hostname"] == persona.hostname
     assert cfg["shell"]["kernel_version"] == persona.kernel
     assert persona.codename in persona.os_pretty
+    assert "Debian" in cfg["shell"]["kernel_build_string"] and persona.os_id == "debian"
+
+
+def test_openssl_version_matches_cowrie_banner(persona):
+    """The SSH banner Cowrie sends advertises the OpenSSL version the persona claims."""
+    cfg = configparser.RawConfigParser()
+    cfg.read(ROOT / "infra/honeypot/cowrie.cfg")
+    assert f"OpenSSL {persona.facts['openssl_version']}" in cfg["shell"]["ssh_version"]
+
+
+def test_command_lists_do_not_overlap_cowrie_commands(persona):
+    """Cowrie implements KNOWN_COMMANDS itself, so the persona must not claim them
+    installed (redundant) or absent (a contradiction Cowrie would expose)."""
+    assert not (persona.absent & KNOWN_COMMANDS)
+    assert not (persona.installed & KNOWN_COMMANDS), sorted(persona.installed & KNOWN_COMMANDS)
 
 
 def test_persona_rejects_overlapping_command_lists(tmp_path):
     """A command cannot be both installed and absent."""
-    raw = (ROOT / "infra/persona/persona.yml").read_text().replace("    - masscan", "    - masscan\n    - lsblk")
+    raw = (ROOT / "infra/persona/persona.yml").read_text().replace("    - masscan", "    - masscan\n    - lsblk")  # also "ss"
     path = tmp_path / "persona.yml"
     path.write_text(raw)
     with pytest.raises(ValueError):

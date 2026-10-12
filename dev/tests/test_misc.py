@@ -9,6 +9,12 @@ from vulnmaze.llm.gateway import GatewayConfig
 from vulnmaze.llm.ratelimit import TokenBuckets
 
 
+def _write_more(log, text: str) -> None:
+    """Append to the log the way Cowrie does, without truncating it."""
+    with open(log, "a") as fh:
+        fh.write(text)
+
+
 def test_token_bucket_refills_over_time():
     """A burst is allowed, then requests wait for refill at the configured rate."""
     b = TokenBuckets(per_minute=60, burst=2)
@@ -22,10 +28,12 @@ def test_tailer_returns_only_complete_lines(tmp_path):
     log.write_bytes(b'{"a":1}\n{"b":')
     t = FileTailer(str(log))
     assert t.poll() == ['{"a":1}']
+    assert t.poll() == []
     with open(log, "ab") as fh:
         fh.write(b"2}\n")
     assert t.poll() == ['{"b":2}']
-    assert t.checkpoint.offset == log.stat().st_size
+    cp = t.checkpoint
+    assert cp is not None and cp.offset == log.stat().st_size
 
 
 @pytest.mark.skipif(os.name == "nt", reason="Windows cannot rename a file that is open")
@@ -41,6 +49,31 @@ def test_tailer_follows_rotation(tmp_path):
     log.write_text("3\n")
     assert t.poll() == ["2"]
     assert t.poll() == ["3"]
+
+
+def test_tailer_resumes_from_a_checkpoint(tmp_path):
+    """Restarting the ingester with a stored checkpoint replays nothing."""
+    log = tmp_path / "cowrie.json"
+    log.write_text("1\n2\n")
+    t = FileTailer(str(log))
+    t.poll()
+    _write_more(log, "3\n")
+    assert FileTailer(str(log), t.checkpoint).poll() == ["3"]
+
+
+@pytest.mark.skipif(os.name == "nt", reason="Windows cannot rename a file that is open")
+def test_tailer_resumes_after_rotation_during_downtime(tmp_path):
+    """Lines written and rotated while the ingester was down are still read once."""
+    log = tmp_path / "cowrie.json"
+    log.write_text("1\n")
+    t = FileTailer(str(log))
+    assert t.poll() == ["1"]
+    _write_more(log, "2\n")
+    log.rename(tmp_path / "cowrie.json.2026-10-01")
+    log.write_text("3\n")
+    t2 = FileTailer(str(log), t.checkpoint)
+    assert t2.poll() == ["2"]
+    assert t2.poll() == ["3"]
 
 
 def test_cohen_kappa():
