@@ -1,3 +1,5 @@
+import hashlib
+
 import pytest
 
 from vulnmaze.common.deid import REDACTED, SRC_IP_TOKEN, Deidentifier, DeidKeyMissing
@@ -9,6 +11,8 @@ def test_ip_pseudonym_is_stable_keyed_and_not_raw(deid):
     assert deid.ip("203.0.113.7") == deid.ip("203.0.113.7")
     assert deid.ip("203.0.113.7") != other.ip("203.0.113.7")
     assert "203.0.113.7" not in deid.ip("203.0.113.7")
+    # Not a plain hash, which anyone could reverse by hashing all IPv4 addresses.
+    assert deid.ip("203.0.113.7") not in hashlib.sha256(b"203.0.113.7").hexdigest()
 
 
 def test_ip_and_password_domains_are_separated(deid):
@@ -27,6 +31,8 @@ def test_redact_text_replaces_longest_secret_first_and_ignores_short_ones():
     """Passwords are replaced longest first, very short ones are kept, and the source IP is tokenised."""
     out = Deidentifier.redact_text("echo admin123 admin ab 10.0.0.5 110.0.0.55", ["admin", "admin123", "ab"], "10.0.0.5")
     assert out == f"echo {REDACTED} {REDACTED} ab {SRC_IP_TOKEN} 110.0.0.55"
+    # an address that merely contains the source IP is untouched
+    assert Deidentifier.redact_text("10.203.0.113.70", set(), "203.0.113.7") == "10.203.0.113.70"
 
 
 def test_key_must_be_present_and_long(monkeypatch):

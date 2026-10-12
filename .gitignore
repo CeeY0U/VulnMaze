@@ -15,3 +15,6 @@ cowrie.json*
 # Cowrie writes var/lib/cowrie/uuid wherever it is imported
 var/
 dropin.cache
+
+# local-only material: private notes, roadmap, harness and ML scratch
+/local/
