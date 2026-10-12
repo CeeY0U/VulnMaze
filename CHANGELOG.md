@@ -7,6 +7,7 @@
 - The model stays loaded while Ollama runs (`OLLAMA_KEEP_ALIVE=-1`) instead of unloading after 30 idle minutes.
 - `/healthz`: `model_ready` now means the model is loaded (Ollama `/api/ps`, exact name and tag), not only downloaded.
 - Leak filter rejected real output starting with `OK` or `Okay` (#7), such as `redis-cli set k v`. `ok` and `okay` now count as a chatty preamble only when a comma or exclamation mark follows (`OK, here you go`); bare `OK` is accepted.
+- Empty LLM answers were accepted and pinned (#19): `lsblk` answered with no output and exit code 0 was stored for that attacker for good. A successful answer with no output is now rejected (reason `empty_output`, retried once, then the fallback, never pinned) for invocations that always print something: `--version`/`--help`, and show-type invocations of lsblk, vmstat, iostat, lsb_release, journalctl, ss, hostnamectl, timedatectl, systemctl, ip and openssl. Quiet flags and mutating subcommands (`ip addr add`, `hostnamectl set-hostname`) are not affected.
 
 ## v0.6.1: Fixes from the first full-stack run
 - Ingester never committed (`ingest/service.py`): the connection was not in autocommit mode, so the first SELECT opened a transaction that never closed and every batch became a savepoint inside it. Logs said "inserted", but no other connection saw the rows and a restart lost them. Now `autocommit=True`; same for the public loader.

@@ -65,3 +65,23 @@ def test_output_denylist():
     assert sanitize.denylisted_content("-----BEGIN OPENSSH " + "PRIVATE KEY-----") == ["denylist_private_key"]
     assert sanitize.denylisted_content("bob ALL=(ALL) NOPASSWD: ALL") == ["denylist_sudoers_rule"]
     assert sanitize.denylisted_path("../etc/sudoers.d/x", "/root", "/root")
+
+
+
+@pytest.mark.parametrize("argv", [["lsblk"], ["systemctl", "status", "nginx"], ["mysql", "--version"]])
+def test_empty_answer_is_rejected(argv):
+    """A successful answer with no output is rejected for commands that always print something."""
+    assert sanitize.empty_output(argv, "", "", 0) == ["empty_output"]
+
+
+@pytest.mark.parametrize(
+    "argv, stdout",
+    [
+        (["ip", "addr", "add", "10.0.0.5/24", "dev", "eth0"], ""),
+        (["journalctl", "-q", "-u", "nginx"], ""),
+        (["lsblk"], "NAME MAJ:MIN\n"),
+    ],
+)
+def test_valid_answer_is_accepted(argv, stdout):
+    """Silent commands, quiet flags and answers with output are accepted."""
+    assert sanitize.empty_output(argv, stdout, "", 0) == []
