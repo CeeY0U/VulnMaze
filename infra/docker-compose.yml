@@ -110,12 +110,15 @@ services:
       VULNMAZE_COWRIE_JSON: /cowrie-logs/cowrie.json
     volumes:
       - cowrie-logs:/cowrie-logs:ro
+    tmpfs: [/tmp]
     networks: [backend]
     depends_on:
       postgres: { condition: service_healthy }
     healthcheck:
-      test: ["CMD", "python", "-c", "import os; os.kill(1, 0)"]
+      test: ["CMD", "python", "-c", "import os, sys, time; sys.exit(time.time() - os.path.getmtime('/tmp/vulnmaze-ingest.heartbeat') > 60)"]
       interval: 10s
+      retries: 3
+      start_period: 30s
 
   state-api:
     build:
