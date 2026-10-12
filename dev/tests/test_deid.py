@@ -39,3 +39,16 @@ def test_key_must_be_present_and_long(monkeypatch):
         Deidentifier.from_env()
     with pytest.raises(DeidKeyMissing):
         Deidentifier(b"short")
+
+
+@pytest.mark.parametrize("username", ["root", "admin", "ubuntu", None])
+def test_common_usernames_are_kept(deid, username):
+    """Common account names stay readable for analysis."""
+    assert deid.username(username) == username
+
+
+@pytest.mark.parametrize("username", ["Hunter22!secret", "john.smith", "Root"])
+def test_other_usernames_are_pseudonymised(deid, username):
+    """Anything else is replaced by a stable keyed HMAC, never stored as typed."""
+    assert deid.username(username) == deid.username(username) != username
+    assert username not in deid.username(username)

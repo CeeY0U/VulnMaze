@@ -93,7 +93,7 @@ class StateStore:
     # ---- per attacker ----------------------------------------------------
 
     def get(self, src_ip: str, username: str, fact: str) -> Fact | None:
-        return self._get(self.attacker_key(src_ip), username, fact)
+        return self._get(self.attacker_key(src_ip), self.deid.username(username), fact)
 
     def create_if_absent(
         self, src_ip: str, username: str, fact: str, value: Any, created_by: str = "unknown"
@@ -101,10 +101,10 @@ class StateStore:
         """Store `value` unless the fact exists; either way return the stored
         value. Safe under concurrency: exactly one caller wins, everyone gets
         the winner's value."""
-        return self._create(self.attacker_key(src_ip), username, fact, value, created_by)
+        return self._create(self.attacker_key(src_ip), self.deid.username(username), fact, value, created_by)
 
     def list(self, src_ip: str, username: str, prefix: str = "") -> list[Fact]:
-        return self._list(self.attacker_key(src_ip), username, prefix)
+        return self._list(self.attacker_key(src_ip), self.deid.username(username), prefix)
 
     # ---- global (the machine itself, same for every attacker) -------------
     # Global facts: whether a command is installed, package versions. Stored under a

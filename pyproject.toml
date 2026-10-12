@@ -69,3 +69,4 @@ ignore = ["E501"]
 
 [tool.ruff.lint.per-file-ignores]
 "src/vulnmaze/router/known_commands.py" = ["SIM905"]
+"src/vulnmaze/common/deid.py" = ["SIM905"]
