@@ -23,6 +23,7 @@ the side of rejecting.
 
 from __future__ import annotations
 
+import posixpath
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -202,3 +203,41 @@ def denylisted_content(text: str) -> list[str]:
 
 def denylisted_path(path: str, cwd: str, home: str) -> bool:
     return is_sensitive_path(path, cwd=cwd, home=home)
+
+
+ALWAYS_PRINTS: dict[str, set[str]] = {
+    "lsblk": set(),
+    "vmstat": set(),
+    "iostat": set(),
+    "lsb_release": set(),
+    "journalctl": set(),
+    "ss": set(),
+    "hostnamectl": {"status"},
+    "timedatectl": {"status", "show"},
+    "systemctl": {"status", "list-units", "list-unit-files", "list-timers"},
+    "ip": {"a", "addr", "address", "r", "route", "l", "link"},
+    "openssl": {"version"},
+}
+VERSION_FLAGS = {"--version", "--help"}
+QUIET_FLAGS = {"-q", "--quiet", "--silent", "-H", "--no-header"}
+
+
+def empty_output(argv: list[str], stdout: str, stderr: str, exit_code: int) -> list[str]:
+    """Reject a successful answer with no output from an invocation that always prints something."""
+    flags = set(argv[1:])
+    if exit_code != 0 or stdout.strip() or stderr.strip() or flags & QUIET_FLAGS:
+        return []
+    if flags & VERSION_FLAGS:
+        return ["empty_output"]
+    name = posixpath.basename(argv[0])
+    subcommands = ALWAYS_PRINTS.get(name)
+    if subcommands is None:
+        return []
+    positional = [a for a in argv[1:] if not a.startswith("-")]
+    if not positional:
+        return ["empty_output"]
+    if positional[0] not in subcommands:
+        return []
+    if name == "ip" and positional[1:2] not in ([], ["show"], ["list"]):
+        return []
+    return ["empty_output"]

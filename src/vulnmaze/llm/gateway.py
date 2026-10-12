@@ -231,6 +231,8 @@ class Validator:
         visible = "\n".join([c.stdout, c.stderr, *(f[1] for f in c.files), *c.facts.values()])
         reasons += self.leaks.check(visible)
         reasons += sanitize.tells(c.stdout, c.stderr)
+        if c.exists:
+            reasons += sanitize.empty_output(req.argv, c.stdout, c.stderr, c.exit_code)
         reasons += sanitize.denylisted_content(visible)
         reasons += self.persona_checker.check(visible)
         reasons += self.persona_checker.check_declared(c.facts)
