@@ -1,7 +1,7 @@
 """Checks against a REAL local model. Never runs in CI; run it on the machine
 with the GPU before tagging v0.6, and whenever you change model or prompt.
 
-    export VULNMAZE_EVAL_LLM_URL=http://localhost:11434 VULNMAZE_EVAL_LLM_MODEL=llama3.1:8b
+    export VULNMAZE_EVAL_LLM_URL=http://localhost:11434 VULNMAZE_EVAL_LLM_MODEL=qwen3.5:4b
     export VULNMAZE_TEST_DSN=postgresql://...
     pytest tests/v0_6/test_real_model.py -v -s
 
@@ -33,7 +33,7 @@ def real_gateway(make_gateway):
         pytest.skip("set VULNMAZE_EVAL_LLM_URL to run against a real model")
     from vulnmaze.llm.backends import OllamaBackend, OpenAIBackend
 
-    model = os.environ.get("VULNMAZE_EVAL_LLM_MODEL", "llama3.1:8b")
+    model = os.environ.get("VULNMAZE_EVAL_LLM_MODEL", "qwen3.5:4b")
     kind = os.environ.get("VULNMAZE_EVAL_LLM_BACKEND", "ollama")
     backend = (OllamaBackend if kind == "ollama" else OpenAIBackend)(URL, model)
     return make_gateway(backend=backend, deadline_s=float(os.environ.get("VULNMAZE_LLM_DEADLINE_S", "8")),

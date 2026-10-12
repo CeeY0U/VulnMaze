@@ -94,9 +94,25 @@ def test_trap_violation_only_counts_claimed_success():
 
 def test_backend_defaults_fit_the_deadline(monkeypatch):
     """Answer cap, context window and deadline defaults are pinned, so results do not depend on Ollama's defaults."""
-    for var in ("VULNMAZE_LLM_BACKEND", "VULNMAZE_LLM_MAX_TOKENS", "VULNMAZE_LLM_NUM_CTX", "VULNMAZE_LLM_DEADLINE_S"):
+    for var in ("VULNMAZE_LLM_BACKEND", "VULNMAZE_LLM_MODEL", "VULNMAZE_LLM_MAX_TOKENS", "VULNMAZE_LLM_NUM_CTX",
+                "VULNMAZE_LLM_DEADLINE_S"):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setenv("VULNMAZE_GATEWAY_TOKEN", "t" * 16)
     backend = backend_from_env()
-    assert (backend.max_tokens, backend.num_ctx) == (400, 4096)
+    assert (backend.model, backend.max_tokens, backend.num_ctx) == ("qwen3.5:4b", 800, 4096)
     assert GatewayConfig.from_env().deadline_s == 15.0
+
+
+@pytest.mark.parametrize("value,expected", [("false", False), ("0", False), ("true", True), ("yes", True)])
+def test_think_setting_reaches_the_backend(monkeypatch, value, expected):
+    """VULNMAZE_LLM_THINK turns the model's thinking mode on or off."""
+    monkeypatch.setenv("VULNMAZE_LLM_THINK", value)
+    assert backend_from_env().think is expected
+
+
+@pytest.mark.parametrize("value", ["abc", "8.5", ""])
+def test_token_cap_must_be_an_integer(monkeypatch, value):
+    """A non-integer answer cap stops the gateway instead of being guessed."""
+    monkeypatch.setenv("VULNMAZE_LLM_MAX_TOKENS", value)
+    with pytest.raises(ValueError):
+        backend_from_env()

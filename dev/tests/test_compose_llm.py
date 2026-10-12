@@ -56,5 +56,20 @@ def test_escalation_is_off_unless_configured(compose):
     assert env["VULNMAZE_ESCALATION"] == "${VULNMAZE_ESCALATION:-off}"
 
 
+@pytest.mark.parametrize("service,var,value", [
+    ("llm-gateway", "VULNMAZE_LLM_MODEL", "${VULNMAZE_LLM_MODEL:-qwen3.5:4b}"),
+    ("ollama-pull", "VULNMAZE_LLM_MODEL", "${VULNMAZE_LLM_MODEL:-qwen3.5:4b}"),
+    ("llm-gateway", "VULNMAZE_LLM_THINK", "${VULNMAZE_LLM_THINK:-false}"),
+    ("llm-gateway", "VULNMAZE_LLM_MAX_TOKENS", "${VULNMAZE_LLM_MAX_TOKENS:-800}"),
+])
+def test_model_defaults_match_the_code(compose, service, var, value):
+    assert compose["services"][service]["environment"][var] == value
+
+
+@pytest.mark.parametrize("service", ["llm-gateway", "ollama-pull"])
+def test_no_service_defaults_to_the_old_model(compose, service):
+    assert "llama3.1:8b" not in str(compose["services"][service]["environment"])
+
+
 def test_persona_mounted_read_only(compose):
     assert "./persona:/persona:ro" in compose["services"]["llm-gateway"]["volumes"]
