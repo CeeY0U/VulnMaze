@@ -123,7 +123,7 @@ def normalise(
         ts=parse_ts(event),
         src_ip_hmac=deid.ip(src_ip),
         src_prefix=deid.prefix(src_ip),
-        username=event.get("username"),
+        username=deid.username(event.get("username")),
         password_hmac=deid.secret(password) if isinstance(password, str) else None,
         password_len=len(password) if isinstance(password, str) else None,
         input=Deidentifier.redact_text(event.get("input"), secrets.passwords, secrets.src_ip),

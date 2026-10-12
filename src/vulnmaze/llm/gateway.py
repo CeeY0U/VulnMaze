@@ -603,7 +603,7 @@ class Gateway:
         row = {
             "session": req.session,
             "attacker_key": self.db.deid.ip(req.src_ip),
-            "username": req.username,
+            "username": self.db.deid.username(req.username),
             "command": redact(" ".join(req.argv))[:2000],
             "outcome": result.outcome,
             "reasons": result.reasons,

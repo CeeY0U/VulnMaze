@@ -8,6 +8,8 @@
   out of any data release.
 * Passwords are replaced by a keyed HMAC and their length. Equality survives
   (password reuse is a useful feature), the plaintext does not.
+* Usernames are kept only if they are common account names; anything else
+  (a mistyped password, a personal name) is replaced by a keyed HMAC.
 * Any password the session tried, and the session's own source IP, are also
   scrubbed from free text such as command lines.
 """
@@ -24,6 +26,14 @@ from collections.abc import Iterable
 REDACTED = "[REDACTED]"
 SRC_IP_TOKEN = "[SRC_IP]"
 MIN_SECRET_LEN = 4  # shorter strings would redact ordinary words
+COMMON_USERNAMES = frozenset(
+    """
+    root daemon bin sys sync games man lp mail news uucp proxy www-data backup list irc nobody sshd
+    admin administrator user test guest support operator ubuntu debian centos pi ec2-user azureuser
+    vagrant oracle postgres mysql ftp ftpuser git deploy jenkins hadoop nagios zabbix tomcat apache
+    nginx docker minecraft steam teamspeak ts3 redis elastic ubnt
+    """.split()
+)
 
 
 class DeidKeyMissing(RuntimeError):
@@ -55,6 +65,11 @@ class Deidentifier:
 
     def secret(self, value: str | None) -> str | None:
         return self._mac("pw", value) if value is not None else None
+
+    def username(self, value: str | None) -> str | None:
+        if value is None or value in COMMON_USERNAMES:
+            return value
+        return "hmac:" + self._mac("user", value)
 
     @staticmethod
     def prefix(ip: str | None) -> str | None:
