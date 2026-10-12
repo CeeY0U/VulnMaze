@@ -14,9 +14,11 @@ approach of Otal and Canbaz [11]); the gateway then parses the text itself.
 
 from __future__ import annotations
 
+import ipaddress
 import os
 import time
 from dataclasses import dataclass
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -112,6 +114,7 @@ class OpenAIBackend(Backend):
     temperature: float = 0.2
     max_tokens: int = 800
     api_key: str = "unused"
+    think: bool | None = None
 
     @property
     def name(self) -> str:
@@ -129,6 +132,8 @@ class OpenAIBackend(Backend):
                 "type": "json_schema",
                 "json_schema": {"name": "shell_result", "schema": schema},
             }
+        if self.think is not None:
+            body["reasoning"] = {"enabled": self.think}
         started = time.perf_counter()
         try:
             async with httpx.AsyncClient(timeout=timeout) as client:
@@ -164,18 +169,30 @@ class OpenAIBackend(Backend):
 def backend_from_env() -> Backend:
     kind = os.environ.get("VULNMAZE_LLM_BACKEND", "ollama")
     url = os.environ.get("VULNMAZE_LLM_URL", "http://ollama:11434")
+    host = urlsplit(url).hostname or ""
+    try:
+        local = "." not in host or ipaddress.ip_address(host).is_private
+    except ValueError:
+        local = False
+    if not local and os.environ.get("VULNMAZE_LLM_ALLOW_HOSTED") != "1":
+        raise ValueError(
+            f"VULNMAZE_LLM_URL {url!r} is outside the deployment; hosted models are opt-in through "
+            "infra/docker-compose.openrouter.yml"
+        )
     model = os.environ.get("VULNMAZE_LLM_MODEL", "qwen3.5:4b")
     mode = os.environ.get("VULNMAZE_LLM_MODE", "json")
     if mode not in ("json", "raw"):
         raise ValueError("VULNMAZE_LLM_MODE must be json or raw")
     temperature = float(os.environ.get("VULNMAZE_LLM_TEMPERATURE", "0.2"))
     max_tokens = int(os.environ.get("VULNMAZE_LLM_MAX_TOKENS", "800"))
+    think_env = os.environ.get("VULNMAZE_LLM_THINK")
+    think = None if think_env is None else think_env.lower() in ("1", "true", "yes")
     if kind == "ollama":
-        think_env = os.environ.get("VULNMAZE_LLM_THINK")
-        think = None if think_env is None else think_env.lower() in ("1", "true", "yes")
         num_ctx = int(os.environ.get("VULNMAZE_LLM_NUM_CTX", "4096"))
         return OllamaBackend(url, model, mode, temperature, max_tokens, num_ctx, think=think)
     if kind == "openai":
+        if not local and not os.environ.get("VULNMAZE_LLM_API_KEY", "").strip():
+            raise ValueError("no API key for the hosted model; set OPENROUTER_API_KEY in infra/.env")
         return OpenAIBackend(
             url,
             model,
@@ -183,5 +200,6 @@ def backend_from_env() -> Backend:
             temperature,
             max_tokens,
             api_key=os.environ.get("VULNMAZE_LLM_API_KEY", "unused"),
+            think=think,
         )
     raise ValueError(f"unknown VULNMAZE_LLM_BACKEND {kind!r}")
