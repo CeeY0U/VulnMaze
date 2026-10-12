@@ -171,7 +171,7 @@ services:
   # once with the ollama-pull job below and kept in the ollama-models volume.
   # GPU: add  -f infra/docker-compose.gpu.yml
   ollama:
-    image: ollama/ollama:${OLLAMA_TAG:-latest}
+    image: ollama/ollama:${OLLAMA_TAG:-0.40.3}
     <<: *hardening
     environment:
       OLLAMA_HOST: 0.0.0.0:11434
@@ -191,7 +191,7 @@ services:
   #   docker compose -f infra/docker-compose.yml --profile models run --rm ollama-pull
   ollama-pull:
     profiles: ["models"]
-    image: ollama/ollama:${OLLAMA_TAG:-latest}
+    image: ollama/ollama:${OLLAMA_TAG:-0.40.3}
     entrypoint: ["/bin/sh", "-c"]
     command: ["ollama serve & sleep 5 && ollama pull $${VULNMAZE_LLM_MODEL} && ollama list"]
     environment:
