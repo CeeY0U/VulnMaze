@@ -67,6 +67,18 @@ log = logging.getLogger("vulnmaze.llm")
 BIN_DIRS = {"/usr/bin", "/bin", "/usr/sbin", "/sbin", "/usr/local/bin", "/usr/local/sbin"}
 COMMAND_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$")
 CORRECTION = "Your previous answer was not accepted. Answer again, following every rule above exactly."
+HINTS = {
+    "invalid_output:not_json": "Answer with one JSON object that has the listed fields and nothing else.",
+    "invalid_output:not_object": "Answer with one JSON object that has the listed fields and nothing else.",
+    "invalid_output:bad_fields": "Answer with one JSON object that has the listed fields and nothing else.",
+    "invalid_output:exit_code": "exit_code is a whole number from 0 to 255.",
+    "reasoning_unclosed": "Give only the answer, without any reasoning.",
+    "invalid_output:too_many_files": f"List at most {MAX_FILES} created files.",
+    "invalid_output:file_too_large": f"Keep each created file under {MAX_FILE_BYTES // 1000} KB.",
+    "tell_s1c_": "stdout and stderr start directly with the program's own text, with no greeting, notes or markdown.",
+    "empty_output": "This command always prints output, so stdout must not be empty.",
+    "exists_mismatch": "This program is installed on this server.",
+}
 MAX_FILES_AT_LOGIN = 50
 MAX_FACT_VALUE = 200
 
@@ -196,7 +208,9 @@ class Validator:
 
     def __init__(self, persona: Persona, prompts: PromptBuilder):
         self.persona_checker = PersonaChecker(persona)
-        self.leaks = sanitize.LeakageDetector(prompts.leakage_corpus() + [CORRECTION], prompts.canary)
+        self.leaks = sanitize.LeakageDetector(
+            prompts.leakage_corpus() + [CORRECTION, *HINTS.values()], prompts.canary
+        )
 
     def clean(
         self, c: Candidate, req: EscalationRequest, reasons_nonfatal: list[str] | None = None
@@ -540,7 +554,7 @@ class Gateway:
             except sanitize.Rejected as rej:
                 reasons.append(rej.reason)
                 stats["rejected_output"] = stats["rejected_output"] or reply.text[:4000]
-                correction = CORRECTION
+                correction = CORRECTION + self._reminder([rej.reason], ctx)
                 continue
             if stripped:
                 reasons.append("reasoning_stripped")
@@ -558,9 +572,13 @@ class Gateway:
         return None
 
     def _reminder(self, problems: list[str], ctx: Context) -> str:
-        """For contradictions, restate the fixed values (never which detector fired)."""
+        """One hint per rejection group, and the fixed values for contradictions; leaks and the denylist get none."""
+        hints = dict.fromkeys(
+            hint for problem in problems for key, hint in HINTS.items() if problem.startswith(key)
+        )
+        reminder = "".join(" " + hint for hint in hints)
         if not any(p.startswith(("contradicts_persona", "contradicts_fact")) for p in problems):
-            return ""
+            return reminder
         p = self.persona
         fixed = [f"hostname is {p.hostname}", f"the system is {p.os_pretty}", f"the kernel is {p.kernel}"]
         fixed += [f"{k} is {v}" for k, v in p.facts.items()]
@@ -569,7 +587,7 @@ class Gateway:
             for k in (x.split(":", 1)[1] for x in problems if x.startswith("contradicts_fact:"))
             if k in ctx.facts
         ]
-        return " These are fixed: " + "; ".join(fixed) + "."
+        return reminder + " These are fixed: " + "; ".join(fixed) + "."
 
     async def _fallback(self, req, name: str, installed: bool, finish) -> ShellResult:
         if installed:
