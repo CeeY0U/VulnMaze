@@ -1,4 +1,4 @@
-"""Fixed handlers for privilege-boundary commands Cowrie 3.0.14 does not ship.
+"""Fixed handlers for privilege-boundary commands Cowrie 3.1.2 does not ship.
 
 Without these, `usermod -aG sudo bob` would print "command not found", which
 is both a fingerprint (every Ubuntu box has usermod) and a
