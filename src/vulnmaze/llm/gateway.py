@@ -38,7 +38,7 @@ import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Response
 from psycopg_pool import ConnectionPool
 
 from vulnmaze.common.deid import Deidentifier
@@ -67,6 +67,18 @@ log = logging.getLogger("vulnmaze.llm")
 BIN_DIRS = {"/usr/bin", "/bin", "/usr/sbin", "/sbin", "/usr/local/bin", "/usr/local/sbin"}
 COMMAND_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$")
 CORRECTION = "Your previous answer was not accepted. Answer again, following every rule above exactly."
+HINTS = {
+    "invalid_output:not_json": "Answer with one JSON object that has the listed fields and nothing else.",
+    "invalid_output:not_object": "Answer with one JSON object that has the listed fields and nothing else.",
+    "invalid_output:bad_fields": "Answer with one JSON object that has the listed fields and nothing else.",
+    "invalid_output:exit_code": "exit_code is a whole number from 0 to 255.",
+    "reasoning_unclosed": "Give only the answer, without any reasoning.",
+    "invalid_output:too_many_files": f"List at most {MAX_FILES} created files.",
+    "invalid_output:file_too_large": f"Keep each created file under {MAX_FILE_BYTES // 1000} KB.",
+    "tell_s1c_": "stdout and stderr start directly with the program's own text, with no greeting, notes or markdown.",
+    "empty_output": "This command always prints output, so stdout must not be empty.",
+    "exists_mismatch": "This program is installed on this server.",
+}
 MAX_FILES_AT_LOGIN = 50
 MAX_FACT_VALUE = 200
 
@@ -93,13 +105,16 @@ def transient_failure() -> tuple[str, str, int]:
 @dataclass
 class GatewayConfig:
     token: str
-    deadline_s: float = 8.0
+    deadline_s: float = 15.0
     max_attempts: int = 2
     min_attempt_s: float = 1.0
     per_attacker_per_min: float = 20
     burst: int = 10
     concurrency: int = 2
     busy_wait_s: float = 1.0
+    warmup_timeout_s: float = 300.0
+    warmup_attempts: int = 5
+    escalation: bool = True
     canary: str = field(default_factory=lambda: "ref-" + secrets.token_hex(6))
 
     @classmethod
@@ -110,12 +125,15 @@ class GatewayConfig:
         env = os.environ.get
         return cls(
             token=token,
-            deadline_s=float(env("VULNMAZE_LLM_DEADLINE_S", "8")),
+            deadline_s=float(env("VULNMAZE_LLM_DEADLINE_S", "15")),
             max_attempts=int(env("VULNMAZE_LLM_MAX_ATTEMPTS", "2")),
             per_attacker_per_min=float(env("VULNMAZE_LLM_PER_ATTACKER_PER_MIN", "20")),
             burst=int(env("VULNMAZE_LLM_BURST", "10")),
             concurrency=int(env("VULNMAZE_LLM_CONCURRENCY", "2")),
             busy_wait_s=float(env("VULNMAZE_LLM_BUSY_WAIT_S", "1")),
+            warmup_timeout_s=float(env("VULNMAZE_LLM_WARMUP_TIMEOUT_S", "300")),
+            warmup_attempts=int(env("VULNMAZE_LLM_WARMUP_ATTEMPTS", "5")),
+            escalation=env("VULNMAZE_ESCALATION", "off").strip().lower() != "off",
             canary=env("VULNMAZE_LLM_CANARY") or "ref-" + secrets.token_hex(6),
         )
 
@@ -190,7 +208,9 @@ class Validator:
 
     def __init__(self, persona: Persona, prompts: PromptBuilder):
         self.persona_checker = PersonaChecker(persona)
-        self.leaks = sanitize.LeakageDetector(prompts.leakage_corpus() + [CORRECTION], prompts.canary)
+        self.leaks = sanitize.LeakageDetector(
+            prompts.leakage_corpus() + [CORRECTION, *HINTS.values()], prompts.canary
+        )
 
     def clean(
         self, c: Candidate, req: EscalationRequest, reasons_nonfatal: list[str] | None = None
@@ -225,6 +245,8 @@ class Validator:
         visible = "\n".join([c.stdout, c.stderr, *(f[1] for f in c.files), *c.facts.values()])
         reasons += self.leaks.check(visible)
         reasons += sanitize.tells(c.stdout, c.stderr)
+        if c.exists:
+            reasons += sanitize.empty_output(req.argv, c.stdout, c.stderr, c.exit_code)
         reasons += sanitize.denylisted_content(visible)
         reasons += self.persona_checker.check(visible)
         reasons += self.persona_checker.check_declared(c.facts)
@@ -355,6 +377,46 @@ class Gateway:
         self.validator = Validator(persona, self.prompts)
         self.buckets = TokenBuckets(cfg.per_attacker_per_min, cfg.burst)
         self.concurrency = Concurrency(cfg.concurrency)
+        self.model_ready = not backend.needs_warmup
+        self.warm_task: asyncio.Task | None = None
+        self.warm_failed = False
+
+    def ensure_warming(self) -> None:
+        """Load the model in the background, with no deadline, unless it is loaded, loading or failed."""
+        if not self.cfg.escalation or self.model_ready or self.warm_failed:
+            return
+        if self.warm_task is not None and not self.warm_task.done():
+            return
+        self.warm_task = asyncio.create_task(self._warm())
+
+    async def _warm(self) -> None:
+        delay = 5.0
+        for attempt in range(1, self.cfg.warmup_attempts + 1):
+            t0 = time.perf_counter()
+            try:
+                timeout = self.cfg.warmup_timeout_s
+                await asyncio.wait_for(self.backend.generate([], None, timeout), timeout)
+                self.model_ready = True
+                log.info("model loaded: %s in %.1f s", self.backend.name, time.perf_counter() - t0)
+                return
+            except (ModelError, TimeoutError) as exc:
+                log.warning(
+                    "could not load model %s (attempt %d/%d): %r",
+                    self.backend.name,
+                    attempt,
+                    self.cfg.warmup_attempts,
+                    exc,
+                )
+            if attempt < self.cfg.warmup_attempts:
+                await asyncio.sleep(delay)
+                delay = min(delay * 2, 60.0)
+        self.warm_failed = True
+        log.error(
+            "model %s failed to load after %d attempts; escalated commands get the fallback "
+            "until the gateway is restarted",
+            self.backend.name,
+            self.cfg.warmup_attempts,
+        )
 
     # -- helpers --------------------------------------------------------------
 
@@ -429,6 +491,10 @@ class Gateway:
             return finish("pinned", p["stdout"], p["stderr"], p["exit_code"], files)
 
         # 4. limits
+        if not self.model_ready:
+            reasons.append("model_failed" if self.warm_failed else "model_loading")
+            self.ensure_warming()
+            return await self._fallback(req, name, installed, finish)
         if not self.buckets.allow(self.db.deid.ip(req.src_ip) or req.src_ip):
             reasons.append("rate_limited")
             return await self._fallback(req, name, installed, finish)
@@ -475,6 +541,9 @@ class Gateway:
                 reply = await asyncio.wait_for(self.backend.generate(messages, schema, remaining), remaining)
             except (ModelError, TimeoutError) as exc:
                 reasons.append(f"model_error:{type(exc).__name__}")
+                if self.backend.needs_warmup and not await self.backend.healthy():
+                    self.model_ready = False
+                    self.ensure_warming()
                 return None  # a down or slow model will not get better within the deadline
             stats["model_ms"] += reply.model_ms
             stats["prompt_tokens"] = (stats["prompt_tokens"] or 0) + (reply.prompt_tokens or 0)
@@ -485,7 +554,7 @@ class Gateway:
             except sanitize.Rejected as rej:
                 reasons.append(rej.reason)
                 stats["rejected_output"] = stats["rejected_output"] or reply.text[:4000]
-                correction = CORRECTION
+                correction = CORRECTION + self._reminder([rej.reason], ctx)
                 continue
             if stripped:
                 reasons.append("reasoning_stripped")
@@ -503,9 +572,13 @@ class Gateway:
         return None
 
     def _reminder(self, problems: list[str], ctx: Context) -> str:
-        """For contradictions, restate the fixed values (never which detector fired)."""
+        """One hint per rejection group, and the fixed values for contradictions; leaks and the denylist get none."""
+        hints = dict.fromkeys(
+            hint for problem in problems for key, hint in HINTS.items() if problem.startswith(key)
+        )
+        reminder = "".join(" " + hint for hint in hints)
         if not any(p.startswith(("contradicts_persona", "contradicts_fact")) for p in problems):
-            return ""
+            return reminder
         p = self.persona
         fixed = [f"hostname is {p.hostname}", f"the system is {p.os_pretty}", f"the kernel is {p.kernel}"]
         fixed += [f"{k} is {v}" for k, v in p.facts.items()]
@@ -514,7 +587,7 @@ class Gateway:
             for k in (x.split(":", 1)[1] for x in problems if x.startswith("contradicts_fact:"))
             if k in ctx.facts
         ]
-        return " These are fixed: " + "; ".join(fixed) + "."
+        return reminder + " These are fixed: " + "; ".join(fixed) + "."
 
     async def _fallback(self, req, name: str, installed: bool, finish) -> ShellResult:
         if installed:
@@ -530,7 +603,7 @@ class Gateway:
         row = {
             "session": req.session,
             "attacker_key": self.db.deid.ip(req.src_ip),
-            "username": req.username,
+            "username": self.db.deid.username(req.username),
             "command": redact(" ".join(req.argv))[:2000],
             "outcome": result.outcome,
             "reasons": result.reasons,
@@ -571,7 +644,10 @@ async def lifespan(_app: FastAPI):
         apply_schema(conn)
     _gateway = Gateway(cfg, Db(pool, deid), backend_from_env(), Persona.from_env())
     log.info("gateway ready: backend=%s mode=%s", _gateway.backend.name, _gateway.backend.mode)
+    _gateway.ensure_warming()
     yield
+    if _gateway.warm_task is not None:
+        _gateway.warm_task.cancel()
     pool.close()
 
 
@@ -585,9 +661,16 @@ def require_token(authorization: str = Header(default="")) -> None:
 
 
 @app.get("/healthz")
-async def healthz() -> dict:
+async def healthz(response: Response) -> dict:
     assert _gateway is not None
-    return {"ok": True, "backend": _gateway.backend.name, "model_ready": await _gateway.backend.healthy()}
+    if _gateway.warm_failed:
+        response.status_code = 503
+    return {
+        "ok": not _gateway.warm_failed,
+        "backend": _gateway.backend.name,
+        "model_ready": _gateway.model_ready and await _gateway.backend.healthy(),
+        "model_failed": _gateway.warm_failed,
+    }
 
 
 @app.post("/v1/escalate", dependencies=[Depends(require_token)], response_model=ShellResult)

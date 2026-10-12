@@ -15,13 +15,13 @@ from __future__ import annotations
 
 import copy
 import re
-import statistics
 from datetime import datetime
 from typing import Any
 
-DIGEST_VERSION = 2  # adds "llm" counts and commands[].llm
+DIGEST_VERSION = 3
 MAX_LOGIN_ATTEMPTS_KEPT = 200  # brute-force sessions: keep counting, stop listing
 MAX_COMMANDS_KEPT = 2000
+MAX_GAPS_KEPT = MAX_COMMANDS_KEPT
 SUBSHELL_WINDOW_S = 0.1  # piped-to-shell commands arrive within a few ms
 _URL = re.compile(r"\b(?:https?|ftp|tftp)://[^\s'\"<>|;]+", re.I)
 _SHELLS = {"bash", "sh", "dash", "zsh", "ash"}
@@ -58,10 +58,22 @@ def new_digest(source: str, session: str) -> dict[str, Any]:
             "gateway_unreachable": 0,
             "latency_ms_total": 0,
         },
-        "timing": {"login_to_first_cmd_s": None, "gaps_s": [], "gap_mean_s": None, "gap_std_s": None},
+        "timing": {
+            "login_to_first_cmd_s": None,
+            "gaps_s": [],
+            "n_gaps": 0,
+            "gap_mean_s": None,
+            "gap_std_s": None,
+        },
         "counts": {"events": 0, "commands": 0, "failed_commands": 0, "nested_commands": 0},
         "ttylog_shasum": None,
-        "_state": {"login_ts": None, "last_cmd_ts": None, "subshell_until": None},
+        "_state": {
+            "login_ts": None,
+            "last_cmd_ts": None,
+            "subshell_until": None,
+            "gap_mean": 0.0,
+            "gap_m2": 0.0,
+        },
     }
 
 
@@ -73,11 +85,23 @@ def _secs(a: str, b: str) -> float:
     return round((datetime.fromisoformat(b) - datetime.fromisoformat(a)).total_seconds(), 6)
 
 
-def _update_gap_stats(d: dict[str, Any]) -> None:
-    gaps = d["timing"]["gaps_s"]
-    if gaps:
-        d["timing"]["gap_mean_s"] = round(statistics.fmean(gaps), 6)
-        d["timing"]["gap_std_s"] = round(statistics.pstdev(gaps), 6) if len(gaps) > 1 else 0.0
+def _update_gap_stats(d: dict[str, Any], gap: float) -> None:
+    """Update the gap mean and standard deviation with Welford's method and keep the first gaps."""
+    timing, st = d["timing"], d["_state"]
+    if "n_gaps" not in timing:
+        old, timing["gaps_s"] = timing["gaps_s"], []
+        timing["n_gaps"], st["gap_mean"], st["gap_m2"] = 0, 0.0, 0.0
+        d["version"] = DIGEST_VERSION
+        for g in old:
+            _update_gap_stats(d, g)
+    timing["n_gaps"] += 1
+    delta = gap - st["gap_mean"]
+    st["gap_mean"] += delta / timing["n_gaps"]
+    st["gap_m2"] += delta * (gap - st["gap_mean"])
+    if len(timing["gaps_s"]) < MAX_GAPS_KEPT:
+        timing["gaps_s"].append(gap)
+    timing["gap_mean_s"] = round(st["gap_mean"], 6)
+    timing["gap_std_s"] = round((st["gap_m2"] / timing["n_gaps"]) ** 0.5, 6)
 
 
 def apply(digest: dict[str, Any], event: dict[str, Any], *, inplace: bool = False) -> dict[str, Any]:
@@ -152,8 +176,7 @@ def apply(digest: dict[str, Any], event: dict[str, Any], *, inplace: bool = Fals
         # Timing only for commands the attacker actually typed.
         if not nested and not realm:
             if st["last_cmd_ts"] is not None:
-                d["timing"]["gaps_s"].append(_secs(st["last_cmd_ts"], ts))
-                _update_gap_stats(d)
+                _update_gap_stats(d, _secs(st["last_cmd_ts"], ts))
             elif st["login_ts"] is not None:
                 d["timing"]["login_to_first_cmd_s"] = _secs(st["login_ts"], ts)
             st["last_cmd_ts"] = ts

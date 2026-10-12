@@ -45,9 +45,43 @@ def test_tells():
     assert sanitize.tells("total 0\n", "ls: cannot access 'x': No such file or directory\n") == []
 
 
+@pytest.mark.parametrize("stdout", ["OK\n", "Okay\n", "OK\nOK\n", "ok 1 - test passed\n"])
+def test_real_output_starting_with_ok_is_not_a_tell(stdout):
+    """Programs such as redis-cli print OK first; that is terminal output, not a preamble."""
+    assert sanitize.tells(stdout, "") == []
+
+
+@pytest.mark.parametrize(
+    "stdout", ["Sure, here is the output:\ntotal 0\n", "Sure, done\n", "OK, here you go\n", "Okay! Running it now\n"]
+)
+def test_chatty_preambles_are_tells(stdout):
+    """An acknowledgement followed by a comma, an exclamation mark or prose is a chatty preamble."""
+    assert sanitize.tells(stdout, "") == ["tell_s1c_preamble_stdout"]
+
+
 def test_output_denylist():
     """Shadow hashes, private keys and sudoers rules never reach the attacker."""
     assert sanitize.denylisted_content("root:$6$salt$hash:19000:0:99999:7:::") == ["denylist_shadow_hash"]
     assert sanitize.denylisted_content("-----BEGIN OPENSSH " + "PRIVATE KEY-----") == ["denylist_private_key"]
     assert sanitize.denylisted_content("bob ALL=(ALL) NOPASSWD: ALL") == ["denylist_sudoers_rule"]
     assert sanitize.denylisted_path("../etc/sudoers.d/x", "/root", "/root")
+
+
+
+@pytest.mark.parametrize("argv", [["lsblk"], ["systemctl", "status", "nginx"], ["mysql", "--version"]])
+def test_empty_answer_is_rejected(argv):
+    """A successful answer with no output is rejected for commands that always print something."""
+    assert sanitize.empty_output(argv, "", "", 0) == ["empty_output"]
+
+
+@pytest.mark.parametrize(
+    "argv, stdout",
+    [
+        (["ip", "addr", "add", "10.0.0.5/24", "dev", "eth0"], ""),
+        (["journalctl", "-q", "-u", "nginx"], ""),
+        (["lsblk"], "NAME MAJ:MIN\n"),
+    ],
+)
+def test_valid_answer_is_accepted(argv, stdout):
+    """Silent commands, quiet flags and answers with output are accepted."""
+    assert sanitize.empty_output(argv, stdout, "", 0) == []

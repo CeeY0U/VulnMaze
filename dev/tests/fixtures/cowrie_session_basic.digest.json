@@ -162,11 +162,12 @@
       0.319772,
       0.32034
     ],
-    "login_to_first_cmd_s": 0.004256
+    "login_to_first_cmd_s": 0.004256,
+    "n_gaps": 8
   },
   "ttylog_shasum": "6a31f1ffa309d8d659baa918f4e82e8cfb7101fd3affda3309c4a547c44efb1d",
   "urls": [
     "http://198.51.100.23/bins/x86.sh"
   ],
-  "version": 2
+  "version": 3
 }

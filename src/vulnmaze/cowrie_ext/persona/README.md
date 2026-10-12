@@ -3,7 +3,7 @@
 Fixed outputs for commands where Cowrie's built-in answer is a known
 fingerprint. `{hostname}` is replaced with the honeypot hostname.
 
-The persona is **Debian 12 (bookworm)**, matching Cowrie 3.0.14's defaults
+The persona is **Debian 12 (bookworm)**, matching Cowrie 3.1.2's defaults
 (kernel 6.1.0-21-amd64, OpenSSH_9.2p1 Debian-2+deb12u3), so the fewest
 things need changing.
 

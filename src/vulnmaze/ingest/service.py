@@ -12,6 +12,7 @@ import logging
 import os
 import signal
 import time
+from pathlib import Path
 
 import psycopg
 
@@ -21,6 +22,7 @@ from vulnmaze.ingest.pipeline import Ingestor
 from vulnmaze.ingest.tailer import Checkpoint, FileTailer
 
 log = logging.getLogger("vulnmaze.ingest")
+HEARTBEAT = Path("/tmp/vulnmaze-ingest.heartbeat")
 
 
 def load_checkpoint(conn: psycopg.Connection, path: str) -> Checkpoint | None:
@@ -47,6 +49,7 @@ def run(dsn: str, path: str, deid: Deidentifier, poll_s: float = 0.5, stop=lambd
         ingestor = Ingestor(conn, deid, source="live")
         log.info("tailing %s", path)
         while not stop():
+            HEARTBEAT.touch()
             lines = tailer.poll()
             if not lines:
                 time.sleep(poll_s)

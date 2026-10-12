@@ -36,6 +36,7 @@ class ModelReply:
 class Backend:
     name: str
     mode: str
+    needs_warmup = False
 
     async def generate(self, messages: list[dict], schema: dict | None, timeout: float) -> ModelReply:
         raise NotImplementedError
@@ -50,9 +51,11 @@ class OllamaBackend(Backend):
     model: str
     mode: str = "json"
     temperature: float = 0.2
-    max_tokens: int = 768
-    keep_alive: str = "30m"
+    max_tokens: int = 400
+    num_ctx: int = 4096
+    keep_alive: str = "-1m"
     think: bool | None = None  # only sent if set; older Ollama/models reject it
+    needs_warmup = True
 
     @property
     def name(self) -> str:
@@ -64,7 +67,11 @@ class OllamaBackend(Backend):
             "messages": messages,
             "stream": False,
             "keep_alive": self.keep_alive,
-            "options": {"temperature": self.temperature, "num_predict": self.max_tokens},
+            "options": {
+                "temperature": self.temperature,
+                "num_predict": self.max_tokens,
+                "num_ctx": self.num_ctx,
+            },
         }
         if schema is not None:
             body["format"] = schema
@@ -86,12 +93,12 @@ class OllamaBackend(Backend):
         )
 
     async def healthy(self) -> bool:
+        tagged = self.model if ":" in self.model else f"{self.model}:latest"
         try:
             async with httpx.AsyncClient(timeout=3) as client:
-                r = await client.get(f"{self.url.rstrip('/')}/api/tags")
+                r = await client.get(f"{self.url.rstrip('/')}/api/ps")
                 return r.status_code == 200 and any(
-                    m.get("name", "").split(":")[0] == self.model.split(":")[0]
-                    for m in r.json().get("models", [])
+                    m.get("name") == tagged for m in r.json().get("models", [])
                 )
         except (httpx.HTTPError, ValueError):
             return False
@@ -103,7 +110,7 @@ class OpenAIBackend(Backend):
     model: str
     mode: str = "json"
     temperature: float = 0.2
-    max_tokens: int = 768
+    max_tokens: int = 400
     api_key: str = "unused"
 
     @property
@@ -162,11 +169,12 @@ def backend_from_env() -> Backend:
     if mode not in ("json", "raw"):
         raise ValueError("VULNMAZE_LLM_MODE must be json or raw")
     temperature = float(os.environ.get("VULNMAZE_LLM_TEMPERATURE", "0.2"))
-    max_tokens = int(os.environ.get("VULNMAZE_LLM_MAX_TOKENS", "768"))
+    max_tokens = int(os.environ.get("VULNMAZE_LLM_MAX_TOKENS", "400"))
     if kind == "ollama":
         think_env = os.environ.get("VULNMAZE_LLM_THINK")
         think = None if think_env is None else think_env.lower() in ("1", "true", "yes")
-        return OllamaBackend(url, model, mode, temperature, max_tokens, think=think)
+        num_ctx = int(os.environ.get("VULNMAZE_LLM_NUM_CTX", "4096"))
+        return OllamaBackend(url, model, mode, temperature, max_tokens, num_ctx, think=think)
     if kind == "openai":
         return OpenAIBackend(
             url,
