@@ -1,4 +1,6 @@
-from vulnmaze.digest.builder import apply, build, new_digest, public_view
+from datetime import UTC, datetime, timedelta
+
+from vulnmaze.digest.builder import MAX_GAPS_KEPT, apply, build, new_digest, public_view
 
 
 def _ev(eventid, second, **fields):
@@ -52,3 +54,23 @@ def test_piped_shell_commands_are_nested_not_typed():
 def test_public_view_hides_internal_state():
     """The export view drops underscore-prefixed bookkeeping."""
     assert "_state" not in public_view(new_digest("live", "s1"))
+
+
+def test_gap_statistics_cover_every_gap():
+    """Mean and population standard deviation of the gaps between typed commands."""
+    events = [_ev("cowrie.login.success", 2)] + [_ev("cowrie.command.input", t, input="id") for t in (3, 4, 6, 9, 15)]
+    timing = build(events, "live", "s1")["timing"]
+    assert timing["gaps_s"] == [1.0, 2.0, 3.0, 6.0] and timing["n_gaps"] == 4
+    assert timing["gap_mean_s"] == 3.0 and timing["gap_std_s"] == 1.870829
+
+
+def test_gap_list_is_capped_in_long_sessions():
+    """A long session keeps the first gaps only, while the count and statistics cover all of them."""
+    start = datetime(2026, 10, 1, tzinfo=UTC)
+    events = [
+        {"eventid": "cowrie.command.input", "session": "s1", "ts": (start + timedelta(seconds=i)).isoformat(), "input": "id"}
+        for i in range(MAX_GAPS_KEPT + 500)
+    ]
+    timing = build(events, "live", "s1")["timing"]
+    assert len(timing["gaps_s"]) == MAX_GAPS_KEPT and timing["n_gaps"] == MAX_GAPS_KEPT + 499
+    assert timing["gap_mean_s"] == 1.0 and timing["gap_std_s"] == 0.0
