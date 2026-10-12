@@ -71,5 +71,32 @@ def test_no_service_defaults_to_the_old_model(compose, service):
     assert "llama3.1:8b" not in str(compose["services"][service]["environment"])
 
 
+@pytest.fixture(scope="module")
+def hosted():
+    return yaml.safe_load((ROOT / "infra/docker-compose.openrouter.yml").read_text())
+
+
+def test_hosted_override_only_widens_the_gateway(hosted):
+    assert set(hosted["services"]) == {"llm-gateway"}
+    gateway = hosted["services"]["llm-gateway"]
+    assert gateway["networks"] == ["egress"]
+    assert gateway["environment"]["VULNMAZE_LLM_ALLOW_HOSTED"] == "1"
+    assert gateway["environment"]["VULNMAZE_LLM_URL"] == "https://openrouter.ai/api"
+    assert gateway["environment"]["VULNMAZE_LLM_API_KEY"].startswith("${OPENROUTER_API_KEY:?")
+    assert gateway["environment"]["VULNMAZE_LLM_MODEL"].startswith("${OPENROUTER_MODEL:?")
+
+
+@pytest.mark.parametrize("text", ["OPENROUTER", "openrouter", "VULNMAZE_LLM_ALLOW_HOSTED", "VULNMAZE_LLM_API_KEY"])
+def test_default_stack_has_no_hosted_model_settings(text):
+    assert text not in (ROOT / "infra/docker-compose.yml").read_text()
+
+
+@pytest.mark.parametrize("name", ["OPENROUTER_API_KEY", "OPENROUTER_MODEL"])
+def test_env_example_ships_openrouter_commented_out(name):
+    lines = (ROOT / "infra/.env.example").read_text().splitlines()
+    assert any(line.startswith(f"# {name}=") for line in lines)
+    assert not any(line.startswith(f"{name}=") for line in lines)
+
+
 def test_persona_mounted_read_only(compose):
     assert "./persona:/persona:ro" in compose["services"]["llm-gateway"]["volumes"]

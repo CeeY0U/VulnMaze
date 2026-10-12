@@ -90,6 +90,31 @@ commands (needs the NVIDIA Container Toolkit on the host). Then set
 choices (`VULNMAZE_LLM_BACKEND`, `VULNMAZE_LLM_URL`, `VULNMAZE_LLM_MODEL`)
 are in `infra/.env.example`.
 
+### OpenRouter for development (optional, off by default)
+
+For testing without a local GPU, the gateway can use a model on OpenRouter.
+It is never the default: the normal stack has no route to the internet and
+refuses a model URL outside the deployment. To opt in, uncomment the two
+OpenRouter lines in `infra/.env` (copied from `infra/.env.example`) and enter
+your key and a model id:
+
+```
+OPENROUTER_API_KEY=sk-or-v1-...
+OPENROUTER_MODEL=qwen/qwen3.5-9b
+```
+
+OpenRouter has no `qwen3.5:4b`; `qwen/qwen3.5-9b` is the smallest Qwen 3.5
+there. Then add the override file:
+
+```bash
+docker compose -f infra/docker-compose.yml -f infra/docker-compose.openrouter.yml up -d --build --wait
+```
+
+Without `-f infra/docker-compose.openrouter.yml` these settings are ignored.
+Every escalated command, its arguments, piped input and recent history are
+then sent to the provider, so use it for development and the harness only,
+never on a public sensor.
+
 ## Development
 
 Requires [uv](https://docs.astral.sh/uv/). It installs Python 3.12 if needed

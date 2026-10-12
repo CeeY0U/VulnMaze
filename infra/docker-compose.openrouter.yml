@@ -1,0 +1,9 @@
+services:
+  llm-gateway:
+    networks: [egress]
+    environment:
+      VULNMAZE_LLM_BACKEND: openai
+      VULNMAZE_LLM_URL: https://openrouter.ai/api
+      VULNMAZE_LLM_MODEL: ${OPENROUTER_MODEL:?set OPENROUTER_MODEL in infra/.env}
+      VULNMAZE_LLM_API_KEY: ${OPENROUTER_API_KEY:?set OPENROUTER_API_KEY in infra/.env}
+      VULNMAZE_LLM_ALLOW_HOSTED: "1"

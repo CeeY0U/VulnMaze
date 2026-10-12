@@ -103,11 +103,85 @@ def test_backend_defaults_fit_the_deadline(monkeypatch):
     assert GatewayConfig.from_env().deadline_s == 15.0
 
 
-@pytest.mark.parametrize("value,expected", [("false", False), ("0", False), ("true", True), ("yes", True)])
-def test_think_setting_reaches_the_backend(monkeypatch, value, expected):
-    """VULNMAZE_LLM_THINK turns the model's thinking mode on or off."""
+@pytest.mark.parametrize("kind", ["ollama", "openai"])
+@pytest.mark.parametrize("value,expected", [("false", False), ("0", False), ("true", True), ("yes", True),
+                                            ("maybe", False)])
+def test_think_setting_reaches_the_backend(monkeypatch, kind, value, expected):
+    """VULNMAZE_LLM_THINK turns thinking on or off for both backends; anything not truthy means off."""
+    monkeypatch.setenv("VULNMAZE_LLM_BACKEND", kind)
     monkeypatch.setenv("VULNMAZE_LLM_THINK", value)
     assert backend_from_env().think is expected
+
+
+@pytest.mark.parametrize("think,sent", [(False, {"enabled": False}), (True, {"enabled": True}), (None, None)])
+def test_openai_backend_sends_the_reasoning_switch(monkeypatch, think, sent):
+    """OpenRouter's reasoning switch is sent only when thinking is set, so other servers get the old request."""
+    import asyncio
+    import json
+
+    import httpx
+
+    from vulnmaze.llm import backends
+
+    seen = {}
+
+    def handler(request):
+        seen.update(json.loads(request.content))
+        return httpx.Response(200, json={"choices": [{"message": {"content": "{}"}}], "usage": {}})
+
+    real = httpx.AsyncClient
+    monkeypatch.setattr(backends.httpx, "AsyncClient", lambda **kw: real(transport=httpx.MockTransport(handler), **kw))
+    backend = backends.OpenAIBackend("http://127.0.0.1:1", "m", think=think)
+    asyncio.run(backend.generate([{"role": "user", "content": "x"}], None, 5))
+    assert seen.get("reasoning") == sent
+
+
+@pytest.mark.parametrize("url", ["http://ollama:11434", "http://localhost:11434", "http://127.0.0.1:11434",
+                                 "http://192.168.1.20:8000"])
+def test_local_model_urls_need_no_opt_in(monkeypatch, url):
+    """Model servers inside the deployment or on the local network are accepted by default."""
+    monkeypatch.delenv("VULNMAZE_LLM_ALLOW_HOSTED", raising=False)
+    monkeypatch.setenv("VULNMAZE_LLM_URL", url)
+    assert backend_from_env().url == url
+
+
+@pytest.mark.parametrize("url", ["https://openrouter.ai/api", "https://api.openai.com", "http://8.8.8.8:11434"])
+def test_hosted_model_urls_are_refused_without_opt_in(monkeypatch, url):
+    """A model URL outside the deployment is refused unless VULNMAZE_LLM_ALLOW_HOSTED=1."""
+    monkeypatch.setenv("VULNMAZE_LLM_URL", url)
+    monkeypatch.delenv("VULNMAZE_LLM_ALLOW_HOSTED", raising=False)
+    with pytest.raises(ValueError, match="opt-in"):
+        backend_from_env()
+    monkeypatch.setenv("VULNMAZE_LLM_ALLOW_HOSTED", "1")
+    assert backend_from_env().url == url
+
+
+@pytest.mark.parametrize("url,key", [("https://openrouter.ai/api", "sk-or-v1-0123456789abcdef"),
+                                     ("http://127.0.0.1:8000", None), ("http://vllm:8000", "")])
+def test_hosted_model_with_a_key_or_local_server_without_one_is_accepted(monkeypatch, url, key):
+    """A hosted model gets its key; a local OpenAI-compatible server needs none."""
+    monkeypatch.setenv("VULNMAZE_LLM_BACKEND", "openai")
+    monkeypatch.setenv("VULNMAZE_LLM_URL", url)
+    monkeypatch.setenv("VULNMAZE_LLM_ALLOW_HOSTED", "1")
+    if key is None:
+        monkeypatch.delenv("VULNMAZE_LLM_API_KEY", raising=False)
+    else:
+        monkeypatch.setenv("VULNMAZE_LLM_API_KEY", key)
+    assert backend_from_env().url == url
+
+
+@pytest.mark.parametrize("key", [None, "", "   "])
+def test_hosted_model_without_a_key_is_refused(monkeypatch, key):
+    """A hosted model with no key stops the gateway instead of failing every answer later."""
+    monkeypatch.setenv("VULNMAZE_LLM_BACKEND", "openai")
+    monkeypatch.setenv("VULNMAZE_LLM_URL", "https://openrouter.ai/api")
+    monkeypatch.setenv("VULNMAZE_LLM_ALLOW_HOSTED", "1")
+    if key is None:
+        monkeypatch.delenv("VULNMAZE_LLM_API_KEY", raising=False)
+    else:
+        monkeypatch.setenv("VULNMAZE_LLM_API_KEY", key)
+    with pytest.raises(ValueError, match="OPENROUTER_API_KEY"):
+        backend_from_env()
 
 
 @pytest.mark.parametrize("value", ["abc", "8.5", ""])
