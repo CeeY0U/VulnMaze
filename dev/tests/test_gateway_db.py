@@ -398,10 +398,29 @@ def http(pg, dsn, fake_llm, monkeypatch):
 
     for k, v in {"VULNMAZE_DSN": dsn, "VULNMAZE_DEID_KEY": TEST_KEY.hex(), "VULNMAZE_GATEWAY_TOKEN": TOKEN,
                  "VULNMAZE_LLM_URL": fake_llm.url, "VULNMAZE_LLM_MODEL": "fake:1b",
-                 "VULNMAZE_PERSONA": str(PERSONA_PATH), "VULNMAZE_LLM_CANARY": CANARY}.items():
+                 "VULNMAZE_PERSONA": str(PERSONA_PATH), "VULNMAZE_LLM_CANARY": CANARY,
+                 # Escalation is off unless the environment turns it on, and while it is off the
+                 # app never loads the model, so /healthz would report it as for ever not-ready.
+                 "VULNMAZE_ESCALATION": "all"}.items():
         monkeypatch.setenv(k, v)
     with TestClient(gateway.app) as c:
         yield c
+
+
+def _healthz_ready(http, timeout: float = 30.0) -> dict:
+    """`/healthz` reports the model as ready only once the background load finishes.
+
+    The app starts that load in its lifespan, so readiness lands a beat after start-up;
+    polling is what the contract allows, not a workaround for a slow assertion.
+    """
+    deadline = time.time() + timeout
+    body: dict = {}
+    while time.time() < deadline:
+        body = http.get("/healthz").json()
+        if body["model_ready"]:
+            return body
+        time.sleep(0.05)
+    raise AssertionError(f"model never became ready: {body}")
 
 
 def test_http_auth_health_and_escalate(http, fake_llm):
@@ -409,7 +428,8 @@ def test_http_auth_health_and_escalate(http, fake_llm):
     assert http.post("/v1/escalate", json=body).status_code == 401
     assert http.post("/v1/escalate", json=body, headers={"Authorization": "Bearer nope"}).status_code == 401
     h = {"Authorization": f"Bearer {TOKEN}"}
-    assert http.get("/healthz").json() == {"ok": True, "backend": "ollama:fake:1b", "model_ready": True}
+    assert _healthz_ready(http) == {"ok": True, "backend": "ollama:fake:1b", "model_ready": True,
+                                    "model_failed": False}
     r = http.post("/v1/escalate", json=body, headers=h).json()
     assert r["outcome"] == "generated"
     assert http.get("/v1/session-files", params={"src_ip": IP, "username": "root"}, headers=h).json() == []

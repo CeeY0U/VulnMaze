@@ -16,6 +16,11 @@ Behaviour is set per test with rules:
 The first matching rule answers. `fake.calls` records every command asked.
 A rule's reply may be a list: successive calls get successive items (the
 last one repeats), for testing retries.
+
+The gateway also warms the model, which Ollama does with a chat request carrying no
+messages (`src/vulnmaze/llm/backends.py`). Those count in `fake.loads` and are answered
+with an empty completion; `/api/ps` lists the model only after it has been loaded, so
+tests can tell a loaded model from an unloaded one the way the gateway does.
 """
 
 from __future__ import annotations
@@ -65,6 +70,7 @@ def command_of(messages: list[dict]) -> str:
 class FakeLLM:
     rules: list[Rule] = field(default_factory=list)
     calls: list[str] = field(default_factory=list)
+    loads: int = 0
     messages: list[list[dict]] = field(default_factory=list)
     default: Callable[[str], dict] = lambda cmd: ok(stdout=f"output of {cmd}\n")
     model_name: str = "fake:1b"
@@ -77,6 +83,9 @@ class FakeLLM:
         return f"http://{host}:{port}"
 
     def answer(self, messages: list[dict]) -> tuple[str, float]:
+        if not messages:
+            self.loads += 1
+            return "", 0.0
         cmd = command_of(messages)
         self.calls.append(cmd)
         self.messages.append(messages)
@@ -84,6 +93,17 @@ class FakeLLM:
             if rule.matches(cmd):
                 return rule.render(cmd, messages), rule.delay
         return json.dumps(self.default(cmd)), 0.0
+
+    def load(self) -> None:
+        """Mark the model loaded the way the gateway's warm-up does: a chat with no messages.
+
+        Anything that asks `/api/ps` before talking to the model — the eval script's preflight —
+        needs this, because a real Ollama lists a model only once it is in memory.
+        """
+        import httpx
+
+        httpx.post(f"{self.url}/api/chat", json={"model": self.model_name, "messages": [], "stream": False},
+                   timeout=10)
 
     def start(self) -> FakeLLM:
         fake = self
@@ -94,15 +114,21 @@ class FakeLLM:
 
             def _send(self, code: int, body: dict) -> None:
                 data = json.dumps(body).encode()
-                self.send_response(code)
-                self.send_header("Content-Type", "application/json")
-                self.send_header("Content-Length", str(len(data)))
-                self.end_headers()
-                self.wfile.write(data)
+                try:
+                    self.send_response(code)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Content-Length", str(len(data)))
+                    self.end_headers()
+                    self.wfile.write(data)
+                except (BrokenPipeError, ConnectionResetError):
+                    pass      # the gateway stopped waiting for a slow model, which is the case under test
 
             def do_GET(self):
                 if self.path == "/api/tags":
                     self._send(200, {"models": [{"name": fake.model_name}]})
+                elif self.path == "/api/ps":
+                    loaded = [{"name": fake.model_name}] if fake.loads else []
+                    self._send(200, {"models": loaded})
                 elif self.path == "/v1/models":
                     self._send(200, {"data": [{"id": fake.model_name}]})
                 else:

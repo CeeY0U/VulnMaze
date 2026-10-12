@@ -65,10 +65,11 @@ def test_eval_script_end_to_end(dsn, pg, tmp_path):
     fake.rules = [Rule(r"systemctl status nonexistent-unit-xyz", ok(stdout="looks fine\n")),   # a violation
                   Rule(r"^(certbot|fail2ban-client|ufw|cloud-init|fooctl)", ok(exists=False))]
     from conftest import TEST_KEY
+    fake.load()                                    # the script's preflight requires a loaded model
     env = os.environ | {"VULNMAZE_DSN": dsn, "VULNMAZE_DEID_KEY": TEST_KEY.hex(), "VULNMAZE_LLM_URL": fake.url,
                         "VULNMAZE_LLM_MODEL": "fake:1b", "VULNMAZE_PERSONA": str(PERSONA_PATH)}
     try:
-        out = subprocess.run([sys.executable, str(ROOT / "scripts/llm_eval.py"), "run", "--out", str(tmp_path)],
+        out = subprocess.run([sys.executable, str(ROOT / "dev/scripts/llm_eval.py"), "run", "--out", str(tmp_path)],
                              env=env, capture_output=True, text=True, timeout=240)
     finally:
         fake.stop()

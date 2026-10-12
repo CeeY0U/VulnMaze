@@ -89,7 +89,7 @@ def loop():
 
 
 @pytest.fixture
-def make_gateway(pg, deid, fake_llm, loop):
+def make_gateway(pg, dsn, deid, fake_llm, loop):
     """Build a Gateway on the fake model and the test database.
 
     Returns build(backend=None, **cfg_overrides) -> (gateway, run), where
@@ -104,13 +104,23 @@ def make_gateway(pg, deid, fake_llm, loop):
 
     pools = []
 
-    def build(backend=None, deadline_s: float = 5.0, **cfg):
+    def build(backend=None, deadline_s: float = 5.0, warm: bool = True, **cfg):
         pool: ConnectionPool = ConnectionPool(
-            pg.dsn, open=True, min_size=1, max_size=10, kwargs={"autocommit": True})
+            dsn, open=True, min_size=1, max_size=10, kwargs={"autocommit": True})
         pools.append(pool)
         config = GatewayConfig(token=TOKEN, canary=CANARY, deadline_s=deadline_s, **cfg)
         gw = Gateway(config, Db(pool, deid), backend or OllamaBackend(fake_llm.url, "fake:1b"),
                      Persona.load(PERSONA_PATH))
+        if warm:
+            # The gateway answers with a fallback until Ollama has loaded the model, so tests that
+            # exercise generation pay for that load up front. Pass warm=False for the not-ready path.
+            async def load_model():
+                gw.ensure_warming()
+                if gw.warm_task is not None:
+                    await gw.warm_task
+
+            loop.run_until_complete(load_model())
+            assert gw.model_ready, "the stand-in model did not finish loading"
 
         def run(argv, ip=IP, username="root", cwd="/root", stdin=None, session="s1", history=None):
             req = EscalationRequest(session=session, src_ip=ip, username=username, cwd=cwd,

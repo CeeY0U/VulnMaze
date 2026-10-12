@@ -32,6 +32,7 @@ def stack():
     dsn = os.environ.get("VULNMAZE_TEST_DSN")
     if not dsn:
         pytest.skip("VULNMAZE_TEST_DSN not set")
+    import httpx
     import psycopg
     import uvicorn
     from conftest import TEST_KEY
@@ -46,14 +47,38 @@ def stack():
     fake = FakeLLM(rules=list(RULES)).start()
     env = {"VULNMAZE_DSN": dsn, "VULNMAZE_DEID_KEY": TEST_KEY.hex(), "VULNMAZE_GATEWAY_TOKEN": TOKEN,
            "VULNMAZE_LLM_URL": fake.url, "VULNMAZE_LLM_MODEL": "fake:1b", "VULNMAZE_PERSONA": str(PERSONA_PATH),
+           # Escalation defaults to off, and a gateway with it off never loads the model, so every
+           # command would come back as the fallback line. The honeypot is only half the switch.
+           "VULNMAZE_ESCALATION": "all",
            "VULNMAZE_LLM_DEADLINE_S": "3", "VULNMAZE_LLM_PER_ATTACKER_PER_MIN": "1000", "VULNMAZE_LLM_BURST": "100"}
     saved = {k: os.environ.get(k) for k in env}
     os.environ.update(env)
+
+    def restore_env():
+        for k, v in saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
     port = free_port()
     server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning"))
     threading.Thread(target=server.run, daemon=True).start()
     while not server.started:
         time.sleep(0.05)
+    fake.load()                       # the gateway loads the model in the background at start-up
+    try:
+        deadline = time.time() + 30
+        while time.time() < deadline:  # and the first attacker must not arrive before it finishes
+            if httpx.get(f"http://127.0.0.1:{port}/healthz", timeout=2).json().get("model_ready"):
+                break
+            time.sleep(0.05)
+        else:
+            pytest.fail("the gateway never loaded the stand-in model")
+    finally:
+        # The app read its configuration in its lifespan, so put the environment back now: leaving
+        # VULNMAZE_ESCALATION set would leak into any honeypot a later test starts in this process.
+        restore_env()
     cowrie_env = {"VULNMAZE_ESCALATION": "all", "VULNMAZE_GATEWAY_URL": f"http://127.0.0.1:{port}",
                   "VULNMAZE_GATEWAY_TOKEN": TOKEN, "VULNMAZE_GATEWAY_TIMEOUT": "8"}
     try:
@@ -62,11 +87,6 @@ def stack():
     finally:
         server.should_exit = True
         fake.stop()
-        for k, v in saved.items():
-            if v is None:
-                os.environ.pop(k, None)
-            else:
-                os.environ[k] = v
 
 
 def llm_events(cowrie, since=0):

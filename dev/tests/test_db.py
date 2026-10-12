@@ -7,7 +7,6 @@ import pytest
 
 psycopg = pytest.importorskip("psycopg")
 
-from vulnmaze.db import apply_schema  # noqa: E402
 from vulnmaze.ingest.pipeline import Ingestor  # noqa: E402
 from vulnmaze.ingest.public import load as load_public  # noqa: E402
 from vulnmaze.state.store import StateStore  # noqa: E402
@@ -20,11 +19,14 @@ RAW_SECRETS = ["203.0.113.7", "192.0.2.10", "S3cretPass!"]
 
 
 @pytest.fixture
-def conn():
-    """An autocommit connection to a database with the schema applied."""
-    with psycopg.connect(DSN, autocommit=True) as c:
-        apply_schema(c)
-        yield c
+def conn(pg):
+    """An autocommit connection to a schema reset for every test.
+
+    The reset is load-bearing: `events.event_hash` is sha256 of the raw line with no source in
+    it, so a fixture that an earlier test already stored would ingest as 41 duplicates, insert
+    nothing, and leave `session_digests` untouched.
+    """
+    return pg
 
 
 def test_facts_are_write_once(conn, deid):
