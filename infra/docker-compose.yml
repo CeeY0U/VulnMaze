@@ -62,7 +62,7 @@ services:
       VULNMAZE_ESCALATION: ${VULNMAZE_ESCALATION:-off}
       VULNMAZE_GATEWAY_URL: http://llm-gateway:8090
       VULNMAZE_GATEWAY_TOKEN: ${VULNMAZE_GATEWAY_TOKEN:?set VULNMAZE_GATEWAY_TOKEN in infra/.env}
-      VULNMAZE_GATEWAY_TIMEOUT: "10"
+      VULNMAZE_GATEWAY_TIMEOUT: ${VULNMAZE_GATEWAY_TIMEOUT:-17}
     volumes:
       - ./honeypot/cowrie.cfg:/cowrie/etc/cowrie.cfg:ro
       - cowrie-logs:/cowrie/var/log/cowrie
@@ -145,11 +145,14 @@ services:
       <<: *pipeline-env
       VULNMAZE_GATEWAY_TOKEN: ${VULNMAZE_GATEWAY_TOKEN:?set VULNMAZE_GATEWAY_TOKEN in infra/.env}
       VULNMAZE_PERSONA: /persona/persona.yml
+      VULNMAZE_ESCALATION: ${VULNMAZE_ESCALATION:-off}
       VULNMAZE_LLM_BACKEND: ${VULNMAZE_LLM_BACKEND:-ollama}
       VULNMAZE_LLM_URL: ${VULNMAZE_LLM_URL:-http://ollama:11434}
       VULNMAZE_LLM_MODEL: ${VULNMAZE_LLM_MODEL:-llama3.1:8b}
       VULNMAZE_LLM_MODE: ${VULNMAZE_LLM_MODE:-json}
-      VULNMAZE_LLM_DEADLINE_S: ${VULNMAZE_LLM_DEADLINE_S:-8}
+      VULNMAZE_LLM_DEADLINE_S: ${VULNMAZE_LLM_DEADLINE_S:-15}
+      VULNMAZE_LLM_MAX_TOKENS: ${VULNMAZE_LLM_MAX_TOKENS:-400}
+      VULNMAZE_LLM_NUM_CTX: ${VULNMAZE_LLM_NUM_CTX:-4096}
       VULNMAZE_LLM_CONCURRENCY: ${VULNMAZE_LLM_CONCURRENCY:-2}
     volumes:
       - ./persona:/persona:ro
@@ -169,7 +172,7 @@ services:
     <<: *hardening
     environment:
       OLLAMA_HOST: 0.0.0.0:11434
-      OLLAMA_KEEP_ALIVE: 30m
+      OLLAMA_KEEP_ALIVE: "-1"
       OLLAMA_NUM_PARALLEL: ${VULNMAZE_LLM_CONCURRENCY:-2}
     volumes:
       - ollama-models:/root/.ollama

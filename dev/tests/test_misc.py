@@ -3,7 +3,9 @@ import os
 import pytest
 
 from vulnmaze.ingest.tailer import FileTailer
+from vulnmaze.llm.backends import backend_from_env
 from vulnmaze.llm.evaluation import cohen_kappa, trap_violation
+from vulnmaze.llm.gateway import GatewayConfig
 from vulnmaze.llm.ratelimit import TokenBuckets
 
 
@@ -55,3 +57,13 @@ def test_trap_violation_only_counts_claimed_success():
     assert not trap_violation("trap", "generated", 1)
     assert not trap_violation("trap", "fallback", 0)
     assert not trap_violation("normal", "generated", 0)
+
+
+def test_backend_defaults_fit_the_deadline(monkeypatch):
+    """Answer cap, context window and deadline defaults are pinned, so results do not depend on Ollama's defaults."""
+    for var in ("VULNMAZE_LLM_BACKEND", "VULNMAZE_LLM_MAX_TOKENS", "VULNMAZE_LLM_NUM_CTX", "VULNMAZE_LLM_DEADLINE_S"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("VULNMAZE_GATEWAY_TOKEN", "t" * 16)
+    backend = backend_from_env()
+    assert (backend.max_tokens, backend.num_ctx) == (400, 4096)
+    assert GatewayConfig.from_env().deadline_s == 15.0

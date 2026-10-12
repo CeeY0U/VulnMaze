@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+- Long answers timed out (#5): the 8 s gateway deadline was shorter than a 768-token answer takes to generate, and Cowrie gave up at 10 s. New defaults: deadline 15 s (`VULNMAZE_LLM_DEADLINE_S`), answers capped at 400 tokens (`VULNMAZE_LLM_MAX_TOKENS`, now passed to the container), Cowrie timeout 17 s (`VULNMAZE_GATEWAY_TIMEOUT`, now settable in `infra/.env`). Keep the Cowrie timeout about 2 s above the deadline.
+- Ollama context window pinned to 4096 tokens (`VULNMAZE_LLM_NUM_CTX`); Ollama's own default varies by version and GPU memory.
+- Local model never loaded (#4): loading takes longer than the 8 s gateway deadline, and Ollama aborts a load when the request gives up. The gateway now loads the model in the background at start-up with no deadline (`VULNMAZE_LLM_WARMUP_TIMEOUT_S`, default 300 s) and answers with the fallback (reason `model_loading`) until it is loaded. After `VULNMAZE_LLM_WARMUP_ATTEMPTS` failed loads (default 5, about 75 s of backoff) it gives up, logs an error, answers with the fallback (reason `model_failed`) and `/healthz` returns 503, so Docker marks `llm-gateway` unhealthy; restart the gateway to retry. With `VULNMAZE_ESCALATION=off` the model is never loaded. After a model error, if the model is no longer loaded, it loads it again before calling it.
+- The model stays loaded while Ollama runs (`OLLAMA_KEEP_ALIVE=-1`) instead of unloading after 30 idle minutes.
+- `/healthz`: `model_ready` now means the model is loaded (Ollama `/api/ps`, exact name and tag), not only downloaded.
+
 ## v0.6.1: Fixes from the first full-stack run
 - Ingester never committed (`ingest/service.py`): the connection was not in autocommit mode, so the first SELECT opened a transaction that never closed and every batch became a savepoint inside it. Logs said "inserted", but no other connection saw the rows and a restart lost them. Now `autocommit=True`; same for the public loader.
 - Health checks spammed Cowrie's log with tracebacks: HAProxy's backend `check` and the Docker healthcheck connected without a PROXY header. HAProxy no longer health-checks the single backend; the Cowrie healthcheck reads `/proc/net/tcp` instead of connecting.
