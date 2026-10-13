@@ -163,12 +163,19 @@ class LeakageDetector:
             words |= _ngrams(_WORD.findall(text.lower()), self.n)
         self._anchors = words
 
-    def check(self, text: str) -> list[str]:
+    def check(self, text: str, echo: Iterable[str] = ()) -> list[str]:
+        """S1a runs on all of `text`. S1b runs on `text` with the attacker's own
+        input spans in `echo` removed, so a quoted injection is not a disclosure.
+        A span that is a single plain word is kept: removing it would let a
+        disclosure through whenever the attacker typed that word."""
         reasons: list[str] = []
         if self.canary and self.canary.lower() in text.lower():
             reasons.append("leak_s1a_canary")
         if _ngrams(_WORD.findall(text.lower()), self.n) & self._anchors:
             reasons.append("leak_s1a_prompt_copy")
+        for span in sorted((s.strip() for s in echo), key=len, reverse=True):
+            if span and not span.isalnum():
+                text = re.sub(re.escape(span), " ", text, flags=re.IGNORECASE)
         for name, pat in S1B_PATTERNS:
             if pat.search(text):
                 reasons.append(f"leak_s1b_{name}")

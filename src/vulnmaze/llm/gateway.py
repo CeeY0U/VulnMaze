@@ -243,7 +243,9 @@ class Validator:
                 reasons_nonfatal.append(f"fact_dropped:{k[:40]}")
 
         visible = "\n".join([c.stdout, c.stderr, *(f[1] for f in c.files), *c.facts.values()])
-        reasons += self.leaks.check(visible)
+        reasons += self.leaks.check(
+            visible, [" ".join(req.argv[1:]), *req.argv[1:], *(req.stdin or "").splitlines(), *req.history]
+        )
         reasons += sanitize.tells(c.stdout, c.stderr)
         if c.exists:
             reasons += sanitize.empty_output(req.argv, c.stdout, c.stderr, c.exit_code)
