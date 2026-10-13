@@ -2,13 +2,14 @@
 
 Uses the same Gateway class as production, with your development database,
 and a fresh made-up attacker address per run so earlier pins don't hide the
-model's behaviour.
+model's behaviour. It waits for the model to finish loading (at most
+--warmup seconds) before the first command, as the gateway's /healthz does.
 
     export VULNMAZE_DSN=postgresql://...  VULNMAZE_DEID_KEY=<hex>
-    export VULNMAZE_LLM_URL=http://localhost:11434 VULNMAZE_LLM_MODEL=llama3.1:8b
-    python scripts/llm_eval.py run   --out eval/results/
+    export VULNMAZE_LLM_URL=http://localhost:11434 VULNMAZE_LLM_MODEL=qwen3.5:4b
+    uv run dev/scripts/llm_eval.py run   --out dev/eval/results/
     # two people fill in rater_1 / rater_2 (1 = realistic, 0 = not) in the CSV
-    python scripts/llm_eval.py score eval/results/<file>.csv
+    uv run dev/scripts/llm_eval.py score dev/eval/results/<file>.csv
 """
 
 from __future__ import annotations
@@ -48,11 +49,17 @@ async def run(args) -> Path:
                         concurrency=1)
     gw = Gateway(cfg, Db(pool, Deidentifier.from_env()), backend, persona)
     detector = LeakageDetector(gw.prompts.leakage_corpus() + [CORRECTION], cfg.canary)
-    # TEST-NET-3 address, new each run, so this run starts with no pins
-    ip = f"203.0.113.{random.randint(1, 254)}"
+    ip = "2001:db8::" + ":".join(f"{random.getrandbits(16):x}" for _ in range(4))
     session = f"eval-{int(time.time())}"
     if not await backend.healthy():
         sys.exit(f"model {backend.name} not reachable or not pulled at {os.environ.get('VULNMAZE_LLM_URL')}")
+    gw.ensure_warming()
+    waited = time.monotonic()
+    while not gw.model_ready and not gw.warm_failed and time.monotonic() - waited < args.warmup:
+        await asyncio.sleep(0.5)
+    if not gw.model_ready:
+        pool.close()
+        sys.exit(f"model {backend.name} did not finish loading within {args.warmup:g} s")
 
     rows = []
     for i, g in enumerate(golden, 1):
@@ -74,13 +81,13 @@ async def run(args) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     name = f"{time.strftime('%Y%m%d-%H%M%S')}-{backend.name.replace(':', '_').replace('/', '_')}.csv"
     path = out_dir / name
-    with open(path, "w", newline="") as fh:
+    with open(path, "w", newline="", encoding="utf-8") as fh:
         w = csv.DictWriter(fh, fieldnames=evaluation.CSV_FIELDS)
         w.writeheader()
         w.writerows(rows)
     summary = evaluation.summarise(rows)
     summary["model"] = backend.name
-    (path.with_suffix(".summary.json")).write_text(json.dumps(summary, indent=2))
+    (path.with_suffix(".summary.json")).write_text(json.dumps(summary, indent=2), encoding="utf-8")
     print(json.dumps(summary, indent=2))
     print(f"\nwrote {path}")
     return path
@@ -93,6 +100,7 @@ def main() -> None:
     r.add_argument("--golden", default=str(ROOT / "eval/golden_commands.yml"))
     r.add_argument("--out", default=str(ROOT / "eval/results"))
     r.add_argument("--deadline", type=float, default=float(os.environ.get("VULNMAZE_LLM_DEADLINE_S", "8")))
+    r.add_argument("--warmup", type=float, default=300.0)
     s = sub.add_parser("score")
     s.add_argument("csv")
     args = ap.parse_args()

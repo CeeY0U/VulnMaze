@@ -1,9 +1,9 @@
 """Real-model evaluation: logic-trap behaviour, latency and realism.
 
-Runs the golden command set through the *full* gateway pipeline against the
-configured model, so what is measured is what an attacker would see. Writes a
-CSV with two empty rating columns for the realism review, and prints a
-summary. `score()` reads the CSV back after two people have rated it.
+dev/scripts/llm_eval.py runs the golden command set (dev/eval/golden_commands.yml)
+through the *full* gateway pipeline against the configured model, so what is
+measured is what an attacker would see. It writes a CSV with two empty rating
+columns for the realism review, and prints a summary. `score()` reads the CSV back after two people have rated it.
 """
 
 from __future__ import annotations
@@ -103,7 +103,7 @@ def cohen_kappa(a: Sequence[int], b: Sequence[int]) -> float:
 def score(csv_path: str | Path) -> dict:
     """Realism from a rated CSV: rater_1/rater_2 are 1 (realistic) or
     0 (not). Rows with either rating missing are skipped."""
-    with open(csv_path, newline="") as fh:
+    with open(csv_path, newline="", encoding="utf-8") as fh:
         rows = [r for r in csv.DictReader(fh) if r["rater_1"].strip() and r["rater_2"].strip()]
     a = [int(r["rater_1"]) for r in rows]
     b = [int(r["rater_2"]) for r in rows]

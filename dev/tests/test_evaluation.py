@@ -63,6 +63,7 @@ def test_eval_script_end_to_end(dsn, pg, tmp_path):
     and writes a CSV plus summary; `score` reads the rated CSV back."""
     fake = FakeLLM(default=lambda cmd: ok(stderr=f"{cmd.split()[0]}: error\n", exit_code=1)).start()
     fake.rules = [Rule(r"systemctl status nonexistent-unit-xyz", ok(stdout="looks fine\n")),   # a violation
+                  Rule(r"systemctl status nginx", ok(stdout="● nginx.service └─ 812 nginx\n")),
                   Rule(r"^(certbot|fail2ban-client|ufw|cloud-init|fooctl)", ok(exists=False))]
     from conftest import TEST_KEY
     fake.load()                                    # the script's preflight requires a loaded model
@@ -81,13 +82,33 @@ def test_eval_script_end_to_end(dsn, pg, tmp_path):
     assert summary["outcomes"]["not_installed"] >= 10          # 5 absent + 5 unknown
     assert summary["latency_ms_p95"] is not None
 
-    rows = list(csv.DictReader(open(csv_path)))
+    rows = list(csv.DictReader(open(csv_path, encoding="utf-8")))
+    assert not any("model_loading" in r["reasons"] for r in rows)
+    assert "● nginx.service" in next(r["stdout"] for r in rows if r["id"] == "sys01")
     for i, r in enumerate(rows):                                # simulate two raters
         r["rater_1"] = "1"
         r["rater_2"] = "1" if i % 10 else "0"
-    with open(csv_path, "w", newline="") as fh:
+    with open(csv_path, "w", newline="", encoding="utf-8") as fh:
         w = csv.DictWriter(fh, fieldnames=rows[0].keys())
         w.writeheader()
         w.writerows(rows)
     s = score(csv_path)
     assert s["rated"] == len(GOLDEN) and s["realistic_rater_1"] == 1.0 and s["cohen_kappa"] == 0.0
+
+
+@pytest.mark.db
+@pytest.mark.parametrize("warmup", ["0", "-1"])
+def test_eval_script_stops_when_model_not_ready(dsn, pg, tmp_path, warmup):
+    """With no time left for the model to load, the script stops before the first command and writes no CSV."""
+    fake = FakeLLM().start()
+    from conftest import TEST_KEY
+    fake.load()
+    env = os.environ | {"VULNMAZE_DSN": dsn, "VULNMAZE_DEID_KEY": TEST_KEY.hex(), "VULNMAZE_LLM_URL": fake.url,
+                        "VULNMAZE_LLM_MODEL": "fake:1b", "VULNMAZE_PERSONA": str(PERSONA_PATH)}
+    try:
+        out = subprocess.run([sys.executable, str(ROOT / "dev/scripts/llm_eval.py"), "run", "--out", str(tmp_path),
+                              "--warmup", warmup], env=env, capture_output=True, text=True, timeout=60)
+    finally:
+        fake.stop()
+    assert out.returncode != 0 and "did not finish loading" in out.stderr
+    assert fake.calls == [] and not list(tmp_path.glob("*.csv"))

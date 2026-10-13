@@ -1,6 +1,6 @@
 """Commands Cowrie 3.1.2 answers itself (Python handlers plus bundled txtcmds).
 
-Generated with ``python scripts/export_known_commands.py`` against the pinned
+Generated with ``python dev/scripts/export_known_commands.py`` against the pinned
 Cowrie version. Regenerate it whenever you bump Cowrie. Inside the running
 honeypot the router asks Cowrie directly instead (see cowrie_ext.hooks), so
 this list is only used for offline classification of datasets and in tests.

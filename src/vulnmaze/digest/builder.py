@@ -7,8 +7,8 @@ session is still running; the ML layer reads it mid-session.
 
 ``apply`` is a pure function of (digest, event): the same events in the same
 order always produce the same digest. That is what the golden-file test
-checks, and it lets us rebuild every digest from the events table after a
-schema change.
+(dev/tests/test_digest.py) checks, and it lets us rebuild every digest from
+the events table after a schema change.
 """
 
 from __future__ import annotations
