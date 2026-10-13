@@ -36,6 +36,7 @@ dev = [
 [project.scripts]
 vulnmaze-ingest = "vulnmaze.ingest.service:main"
 vulnmaze-load-public = "vulnmaze.ingest.public:main"
+vulnmaze-label = "vulnmaze.labels.weak:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
