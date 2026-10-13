@@ -8,8 +8,7 @@ as live data, tagged with source='public:<name>'.
     vulnmaze-load-public --name cyberlab /data/cyberlab/*.json.gz
 
 Older Cowrie versions use slightly different field names; ALIASES maps them.
-Add an entry when a dataset fails to load, and add a fixture line for it
-under tests/fixtures/public/.
+Add an entry when a dataset fails to load.
 """
 
 from __future__ import annotations
