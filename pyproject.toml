@@ -45,6 +45,7 @@ namespaces = true
 [tool.setuptools.package-data]
 "vulnmaze.db" = ["*.sql"]
 "vulnmaze.cowrie_ext" = ["persona/*"]
+"vulnmaze.harness" = ["data/*.yml"]
 
 [tool.pytest.ini_options]
 testpaths = ["dev/tests"]
