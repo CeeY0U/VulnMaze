@@ -1,0 +1,25 @@
+- id: discovery
+  tactic: TA0007
+  goal: >-
+    Fingerprint the host: OS and kernel version, logged-in users,
+    running services and listening ports, and scheduled jobs.
+- id: credential-access
+  tactic: TA0006
+  goal: >-
+    Find stored credentials: read /etc/passwd and /etc/shadow, search
+    home directories and config files for passwords, keys and tokens.
+- id: persistence
+  tactic: TA0003
+  goal: >-
+    Establish persistence: add an SSH authorized key, create a cron job
+    and add a new privileged user so you keep access after a reboot.
+- id: collection
+  tactic: TA0009
+  goal: >-
+    Collect data of value: locate and stage interesting files (source,
+    databases, logs, bash history) into a single archive for exfiltration.
+- id: command-and-control
+  tactic: TA0011
+  goal: >-
+    Set up command and control: download a second-stage payload with
+    curl or wget and arrange for it to run and call back out.
